@@ -1,6 +1,8 @@
 import mmap
 import numpy as np
 import os
+import warnings
+from typing import List, Union, Optional, Any, Sequence
 from fishmol.atoms import Atoms
 
 class Trajectory(object):
@@ -16,7 +18,7 @@ class Trajectory(object):
     Methods
     Selecting and slicing: select the specified 
     """
-    def __init__(self, timestep, data = None, natoms = None, nframes = None, frames = None, index = None, cell = None):
+    def __init__(self, timestep: float, data: Optional[str] = None, natoms: Optional[int] = None, nframes: Optional[int] = None, frames: Optional[List[Atoms]] = None, index: Optional[Union[int, slice, str]] = None, cell: Any = None) -> None:
         self.timestep = timestep
         self.data = data
         if index is None:
@@ -37,14 +39,15 @@ class Trajectory(object):
     def __iter__(self):
         return iter(self.frames)
     
-    def __getitem__(self, n):
+    def __getitem__(self, n: Union[int, slice, Sequence[int]]) -> 'Trajectory':
         """
-        Enbale slicing and selecting frames from a Trajectory, returns a list of frames.
+        Enable slicing and selecting frames from a Trajectory, returns a new Trajectory object.
         """
         if isinstance(n, int):
             if n < 0 : #Handle negative indices
                 n += self.nframes
             if n < 0 or n >= self.nframes:
+                warnings.warn(f"The index ({n}) is out of bounds (nframes={self.nframes}).")
                 raise IndexError("The index (%d) is out of range."%n)
             frames = [self.frames[n],]
         elif isinstance(n, tuple) or isinstance(n, list):
@@ -65,7 +68,7 @@ class Trajectory(object):
             raise TypeError("Invalid argument type.")
         return self.__class__(timestep = self.timestep, natoms = self.natoms, nframes = len(frames), frames = frames, index = n, cell = self.cell)
     
-    def read(self, data):
+    def read(self, data: str) -> tuple:
         """
         Fast read trajectory data using mmap.
         """
@@ -105,7 +108,7 @@ class Trajectory(object):
         frames = [frame2atoms(np.array(frames[x:x + natoms]), cell = self.cell) for x in range(0, len(frames), natoms)][::step]
         return natoms, nframes, frames
     
-    def write(self, filename = None):
+    def write(self, filename: Optional[str] = None) -> None:
         """
         Write trajectory into xyz file. Filtering atoms is supported by passing index, list of indices or slice object. If inverse_select, the atoms not in the select list will be write into xyz file.
         """
@@ -129,7 +132,7 @@ class Trajectory(object):
                            delimiter=',', fmt = "%-2s %-2s %-2s %-2s")
             f.close()
     
-    def calib(self, save = False, filename = None):
+    def calib(self, save: bool = False, filename: Optional[str] = None) -> 'Trajectory':
         """
         Calibrate the trajectory by center of mass.
         """
@@ -156,12 +159,12 @@ class Trajectory(object):
                 frame.pos = shift + frame.pos
         return self
     
-    def wrap2box(self, center=(0.5, 0.5, 0.5), pretty_translation = False, eps = 1e-7):
+    def wrap2box(self, center: Tuple[float, float, float] = (0.5, 0.5, 0.5), pretty_translation: bool = False, eps: float = 1e-7) -> 'Trajectory':
         for frame in self.frames:
             frame = frame.wrap_pos(center = center, pretty_translation = pretty_translation, eps = eps)
         return self
     
-def frame2atoms(frame, cell = None, basis='Cartesian'):
+def frame2atoms(frame: np.ndarray, cell: Any = None, basis: str = 'Cartesian') -> Atoms:
     symbs = frame[:]["symbol"]
     pos = frame[:]["position"]
     atoms = Atoms(symbs = symbs, pos = pos, cell = cell, basis = basis)

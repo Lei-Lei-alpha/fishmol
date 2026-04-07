@@ -2,6 +2,8 @@
 
 import numpy as np
 import itertools
+import warnings
+from typing import List, Tuple, Union, Optional, Any, Sequence
 from recordclass import make_dataclass, asdict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -35,7 +37,7 @@ class RDF(object):
     scaler : np.array distances
     com_plot : 
     """
-    def __init__(self, traj, at_g1, at_g2, nbins = 200, range = (0.0, 15.0)):
+    def __init__(self, traj: Any, at_g1: Union[List[int], Any], at_g2: Union[List[int], Any], nbins: int = 200, range: Tuple[float, float] = (0.0, 15.0)) -> None:
         self.g1 = at_g1
         self.g2 = at_g2
         self.traj = traj
@@ -49,7 +51,7 @@ class RDF(object):
         # Need to know average volume
         self.volume = np.zeros(self.settings.bins) + np.asarray(self.traj.cell[0]).dot(np.cross(np.asarray(self.traj.cell[1]), np.asarray(self.traj.cell[2])))
         
-    def calculate(self, plot = False, com_plot = False, **kwargs):
+    def calculate(self, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
         """
         Calculate the RDF of two atom groups by calling this function.
          
@@ -124,7 +126,7 @@ class ADF(object):
     radii : (n_radii) np.array
         radii over which g(r) is computed
     """
-    def __init__(self, traj, at_g1, at_g2, at_g3, nbins = 200, range = (0.0, 180.0)):
+    def __init__(self, traj: Any, at_g1: Any, at_g2: Any, at_g3: Any, nbins: int = 200, range: Tuple[float, float] = (0.0, 180.0)) -> None:
         self.g1 = at_g1
         self.g2 = at_g2
         self.g3 = at_g3
@@ -141,7 +143,7 @@ class ADF(object):
         self.results.count = count
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         
-    def calculate(self, cone_correction = True, plot = False, com_plot = False, **kwargs):
+    def calculate(self, cone_correction: bool = True, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
         angles = []
         for frame in self.traj:
             pairs, angle = frame.angles(self.g1, self.g2, self.g3, mic = True)
@@ -208,7 +210,7 @@ class DDF(object):
     radii : (n_radii) np.array
         radii over which g(r) is computed
     """
-    def __init__(self, traj, at_g, nbins = 200, range = (0.0, 180.0)):
+    def __init__(self, traj: Any, at_g: Any, nbins: int = 200, range: Tuple[float, float] = (0.0, 180.0)) -> None:
         self.g = at_g
         self.traj = traj
         settings = make_dataclass("Settings", "bins range")
@@ -223,7 +225,7 @@ class DDF(object):
         self.results.count = count
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         
-    def calculate(self, plot = False, com_plot = False, **kwargs):
+    def calculate(self, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
         angles = []
         for frame in self.traj:
             pairs, angle = frame.dihedrals(self.g, mic = True)
@@ -286,7 +288,7 @@ class CDF(object):
     radii : (n_radii) np.array
         radii over which g(r) is computed
     """
-    def __init__(self, scaler1, scaler2, names = None, range = None):
+    def __init__(self, scaler1: Any, scaler2: Any, names: Optional[List[str]] = None, range: Optional[Tuple[List[float], List[float]]]  = None) -> None:
         self.s1 = scaler1
         self.s2 = scaler2
         self.names = names
@@ -297,7 +299,7 @@ class CDF(object):
         results = make_dataclass("Results", "xedges yedges xcenters ycenters x y cdf plot")
         self.results = results
         
-    def calculate(self, plot = True, **kwargs):
+    def calculate(self, plot: bool = True, **kwargs: Any) -> Any:
         self.results.xedges = self.s1.edges
         self.results.yedges = self.s2.edges
 
@@ -357,7 +359,7 @@ class VRD(object):
     - C_t: the average c_t
     - C_t_error: the error of c_t
     """
-    def __init__(self, traj = None, spec = None, timestep = None, num = 2000, sampling = 5, skip = 10):
+    def __init__(self, traj: Any = None, spec: Any = None, timestep: Optional[float] = None, num: int = 2000, sampling: int = 5, skip: int = 10) -> None:
         results = make_dataclass("Results", "t C_t C_t_error t_fit C_t_fit fit_params plot")
         self.results = results
         self.traj = traj
@@ -373,7 +375,7 @@ class VRD(object):
                 if timestep is not None:
                     self.t_step = timestep
                 else:
-                    print("VRD created with array of vectors without specifying timestep, using default timestep of 5 fs, please specify the timestep you are using if this is incorrect.")
+                    warnings.warn("VRD created with array of vectors without specifying timestep, using default timestep of 5 fs, please specify the timestep you are using if this is incorrect.")
                     self.t_step = 5
             else:
                 raise Exception("Please either specify\n:(i)a Trajectory object and a list of the indices of two atoms\nor\n(ii) a np.array object of vector data and the timestep of the vector data.")
@@ -381,7 +383,7 @@ class VRD(object):
             raise Exception("Please either specify\n:(i)a Trajectory object and a list of the indices of two atoms\nor\n(ii) a np.array object of vector data and the timestep of the vector data.")
         self.results.t = np.linspace(0, self.t_step * (self.num - 1) / 1000, num = self.num//self.sampling)
     
-    def calculate(self, l = 3, mean = True, fit = False, plot = True, log_scale = False, **kwargs):
+    def calculate(self, l: int = 3, mean: bool = True, fit: bool = False, plot: bool = True, log_scale: bool = False, **kwargs: Any) -> Any:
         if self.traj is not None:
             if any([self.spec[0] is None, self.spec[1] is None]):
                 raise ValueError("Please specify atom groups ")

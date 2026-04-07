@@ -1,3 +1,5 @@
+import warnings
+from typing import List, Tuple, Union, Optional, Any, Sequence
 from IPython.display import clear_output
 import numpy as np
 import fractions as f
@@ -8,7 +10,7 @@ from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d, Axes3D
 from itertools import combinations
 
-def update_progress(progress):
+def update_progress(progress: Union[float, int]) -> None:
   
     bar_length = 20
     if isinstance(progress, int):
@@ -27,14 +29,14 @@ def update_progress(progress):
     print(text)
 
 
-def to_sublists(lst, length=2):
+def to_sublists(lst: Sequence[Any], length: int = 2) -> List[Any]:
     """
     Split a list to sublists with specified length: e.g. a = [a,b,c,d,e]
     to_sublists(a) => [[a,b], [b,c], [c,d], [d,e]] 
     """
     return [lst[i:i+length] for i in range(len(lst)+1-length)]
 
-def make_comb(a, b):
+def make_comb(a: Union[int, List[Any]], b: Union[int, List[Any]]) -> List[Any]:
     if all([isinstance (a, int), isinstance(b, int)]):
         comb = [(a, b)]
     elif any([isinstance (a, int), isinstance(b, int)]):
@@ -60,7 +62,7 @@ def make_comb(a, b):
         raise ValueError("Valid input of a and b: int, list, list of lists of int.")
     return comb
 
-def cart2xys(pos, cell):
+def cart2xys(pos: Union[np.ndarray, List[float]], cell: Any) -> np.ndarray:
     """
     Cartesian (absolute) position in angstrom to fractional position (scaled position in lattice).
     """
@@ -69,7 +71,7 @@ def cart2xys(pos, cell):
     xyzs = np.tensordot(bg, pos.T, axes=([-1], 0)).T
     return xyzs
 
-def xys2cart(pos, cell):
+def xys2cart(pos: Union[np.ndarray, List[float]], cell: Any) -> np.ndarray:
     """
     Fractional position (scaled position in lattice) to cartesian (absolute) position in angstrom.
     """
@@ -77,7 +79,7 @@ def xys2cart(pos, cell):
     xyzr = np.tensordot(cell.lattice, pos.T, axes=([-1], 0)).T
     return xyzr
 
-def translate_pretty(fractional, pbc):
+def translate_pretty(fractional: np.ndarray, pbc: Union[Sequence[bool], np.ndarray]) -> np.ndarray:
     """Translates atoms such that fractional positions are minimized."""
 
     for i in range(3):
@@ -95,11 +97,11 @@ def translate_pretty(fractional, pbc):
 # def to_ase_atoms()
 
 
-def retrieve_symbol(string):
+def retrieve_symbol(string: str) -> str:
     """function to remove numbers in a string, so that the atom dict keys can be converted to chemical symbols"""
     return ''.join([i for i in string if not i.isdigit()])
 
-def mic_dist(pos1, pos2, cell = None):
+def mic_dist(pos1: np.ndarray, pos2: np.ndarray, cell: Any = None) -> float:
     dc_cell = make_dataclass("Cell", 'lattice')
     if isinstance(cell, dataobject):
         pass
@@ -113,7 +115,7 @@ def mic_dist(pos1, pos2, cell = None):
     return np.linalg.norm(a2b)
 
 # Define functions to convert vectors between miller indices and cartesian coordinates
-def get_gcd(ints):
+def get_gcd(ints: Sequence[int]) -> int:
     """
     Calculate the maximal common divisor of a list of integers
     """
@@ -126,7 +128,7 @@ class vector:
     """
     Vecotor object that can convert between miller indices and cartesian coordination (normalised).
     """
-    def __init__(self, array, cell, name = "miller"):
+    def __init__(self, array: Sequence[float], cell: Any, name: str = "miller"):
         if len(array) != 3:
             raise Exception("The input array must has a length of exactly 3.")
         else:
@@ -177,11 +179,11 @@ class h_channel(Voronoi):
     def __init__(self, points, furthest_site=False, incremental=False, qhull_options=None):
         super().__init__(points, furthest_site, incremental, qhull_options)
 
-    def sort_points(self, points):
+    def sort_points(self, points: Sequence[Any]) -> List[int]:
         indices = [self.point_region[distance.cdist([point], self.points).argmin()] for point in points]
         return indices
 
-def calc_freq(regions, timestep = None):
+def calc_freq(regions: Sequence[Any], timestep: Optional[float] = None) -> float:
     """
     Calculates the frequency of switching channels, unit times per ps
     """
@@ -190,7 +192,7 @@ def calc_freq(regions, timestep = None):
     freq = None
     
     if timestep is None:
-        print("No timestep specified, defauting to 5 fs!")
+        warnings.warn("No timestep specified, defaulting to 5 fs!")
         timestep = 5
         
     for i, region in enumerate(regions):
@@ -218,7 +220,7 @@ class Arrow3D(FancyArrowPatch):
       return np.min(zs)
   
   
-  def get_basis(h_path, cell, miller = True):
+  def get_basis(h_path: Any, cell: Any, miller: bool = True) -> Tuple[np.ndarray, np.ndarray]:
     """Identifies two vectors that are perpendicular to the h_path,
     if h_path is in Cartesian coordinates rather than Miller indices, set miller = False"""
     # Create the vector object
@@ -241,7 +243,7 @@ class Arrow3D(FancyArrowPatch):
     basis_y = np.cross(h_path.array, basis_x)
     return basis_x, basis_y
 
-def trans_coord(points, cell, W, miller = True):
+def trans_coord(points: np.ndarray, cell: Any, W: np.ndarray, miller: bool = True) -> np.ndarray:
     """Change coordinate system of points from [[1,0,0],[0,1,0],[0,0,1]] to W"""
     # We need to get cartesion coordinates if the points are in Miller indices
     trans_pos = np.zeros(points.shape)

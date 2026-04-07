@@ -1,7 +1,7 @@
 import numpy as np
 import itertools
 from recordclass import make_dataclass, dataobject
-# from recordclass import make_dataclass, dataobject, astuple, asdict
+from typing import List, Tuple, Union, Optional, Any, Sequence
 from fishmol.data import elements
 from fishmol.utils import make_comb, cart2xys, xys2cart, translate_pretty
 
@@ -13,7 +13,7 @@ class Atom(np.ndarray):
     cell : the Cell object, the unit cell associated to the coordinates.
     basis : {'Cartesian', 'Crystal'}, Describes whether the array contains crystal or cartesian coordinates.
     """
-    def __new__(cls, symb, pos, cell = None, basis='Cartesian', pbc = (1,1,1)):
+    def __new__(cls, symb: str, pos: Union[List[float], np.ndarray], cell: Any = None, basis: str = 'Cartesian', pbc: Tuple[int, int, int] = (1,1,1)) -> 'Atom':
         dc_cell = make_dataclass("Cell", 'lattice')
         crys_names = ['Crystal', 'Crys', 'Cr', 'S']
         cart_names = ['Cartesian', 'Cart', 'Ca', 'R']
@@ -31,7 +31,7 @@ class Atom(np.ndarray):
         obj._pbc = pbc
         return obj
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Any) -> None:
         if obj is None:
             return
         self._cell = getattr(obj, '_cell', None)
@@ -57,7 +57,7 @@ class Atom(np.ndarray):
     def pbc(self):
         return self._pbc
 
-    def to_cart(self):
+    def to_cart(self) -> 'Atom':
         """
         Converts the coordinates to Cartesian and return a new Atom object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -70,7 +70,7 @@ class Atom(np.ndarray):
             pos = xys2cart(self.pos, self.cell)
             return Atom(symb = self.symb, pos=pos, cell=self.cell, basis=self.coord_names.cart_names[0], pbc = self.pbc)
 
-    def to_crys(self):
+    def to_crys(self) -> 'Atom':
         """
         Converts the coordinates to Crystal and return a new Atom object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class Atom(np.ndarray):
             pos = cart2xys(self.pos, self.cell)
             return Atom(symb = self.symb, pos=pos, cell=self.cell, basis=self.coord_names.crys_names[0], pbc = self.pbc)
 
-    def to_basis(self, basis):
+    def to_basis(self, basis: str) -> 'Atom':
         """
         Converts the coordinates to the desired basis and return a new object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ class Atom(np.ndarray):
         else:
             raise NameError("Trying to convert to an unknown basis")
 
-    def vec(self, other, mic = False):
+    def vec(self, other: 'Atom', mic: bool = False) -> np.ndarray:
         """
         Calculate the vector connecting two Atom.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ class Atom(np.ndarray):
             else:
                 return a2b
             
-    def dist(self, other, mic = False):
+    def dist(self, other: 'Atom', mic: bool = False) -> float:
         """
         Calculate the distance between two Atom objects.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -153,7 +153,7 @@ class Atoms(np.ndarray):
     cell : the Cell object, the unit cell associated to the coordinates.
     basis : {'Cartesian', 'Crystal'}, Describes whether the array contains crystal or cartesian coordinates.
     """
-    def __new__(cls, symbs, pos, cell = None, basis='Cartesian', pbc = (1,1,1)):
+    def __new__(cls, symbs: Union[List[str], str, np.ndarray], pos: Union[List[List[float]], np.ndarray], cell: Any = None, basis: str ='Cartesian', pbc: Tuple[int, int, int] = (1,1,1)) -> 'Atoms':
         dt = np.dtype([('symbol', np.unicode_, 2), ('position', np.float64, (3,))])
         dc_cell = make_dataclass("Cell", 'lattice')
         crys_names = ['Crystal', 'Crys', 'Cr', 'S']
@@ -185,7 +185,7 @@ class Atoms(np.ndarray):
         obj._pbc = pbc
         return obj
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Any) -> None:
         if obj is None:
             return
         self._cell = getattr(obj, '_cell', None)
@@ -220,10 +220,10 @@ class Atoms(np.ndarray):
     def cell(self, cell_arr):
         self._cell = cell_arr
         
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.symbs)
     
-    def __getitem__(self, n):
+    def __getitem__(self, n: Union[int, str, Tuple, List, slice]) -> 'Atoms':
         """
         Enable slicing of Atoms object.
         """
@@ -263,7 +263,7 @@ class Atoms(np.ndarray):
         
         return self.__class__(symbs = self.symbs[select], pos = self.pos[select], cell = self.cell, basis = self.basis, pbc = self.pbc)
     
-    def to_cart(self):
+    def to_cart(self) -> 'Atoms':
         """
         Converts the coordinates to Cartesian and return a new Atoms object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -279,7 +279,7 @@ class Atoms(np.ndarray):
                 self.pos = xys2cart(self.pos, self.cell)
             return self
 
-    def to_crys(self):
+    def to_crys(self) -> 'Atoms':
         """
         Converts the coordinates to Crystal and return a new Atom object.
         Returns
@@ -295,7 +295,7 @@ class Atoms(np.ndarray):
                 self.pos = cart2xys(self.pos, self.cell)
             return self
 
-    def to_basis(self, basis):
+    def to_basis(self, basis: str) -> 'Atoms':
         """
         Converts the coordinates to the desired basis and return a new object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -312,7 +312,7 @@ class Atoms(np.ndarray):
         else:
             raise NameError("Trying to convert to an unknown basis")
 
-    def vec(self, a, b, normalise = False, absolute = True, mic = False):
+    def vec(self, a: int, b: int, normalise: bool = False, absolute: bool = True, mic: bool = False) -> np.ndarray:
         """
         Calculate the vector connecting two atoms in the Atoms object with indices m and n.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -342,7 +342,7 @@ class Atoms(np.ndarray):
                     a2b = a2b/np.linalg.norm(a2b)
         return a2b
     
-    def vecs(self, a = None, b = None, combs = None, normalise = False, absolute = True, mic = False):
+    def vecs(self, a: Optional[Union[int, List[int]]] = None, b: Optional[Union[int, List[int]]] = None, combs: Optional[List[Any]] = None, normalise: bool = False, absolute: bool = True, mic: bool = False) -> np.ndarray:
         if all([a is None, b is None, combs is None]):
             raise ValueError("No atoms specified!")
         else:
@@ -356,7 +356,7 @@ class Atoms(np.ndarray):
         a2bs = np.asarray([self.vec(*comb, normalise = normalise, absolute = absolute, mic = mic) for comb in combs])
         return a2bs
             
-    def dist(self, a, b, mic = False):
+    def dist(self, a: int, b: int, mic: bool = False) -> float:
         """
         Calculate the distance between two Atom objects.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -376,7 +376,7 @@ class Atoms(np.ndarray):
             a2b = self.pos[b] - self.pos[a]
         return np.linalg.norm(a2b)
     
-    def dists(self, at_g1, at_g2, cutoff = None, mic = False):
+    def dists(self, at_g1: List[int], at_g2: List[int], cutoff: Optional[float] = None, mic: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculates the distances between two atom groups.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -400,7 +400,7 @@ class Atoms(np.ndarray):
             pairs = np.array(pairs)[mask]
         return pairs, distances
     
-    def angle(self, a, b, c, mic = False):
+    def angle(self, a: int, b: int, c: int, mic: bool = False) -> float:
         """
         Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -424,7 +424,7 @@ class Atoms(np.ndarray):
             b2c = self[c].to_cart().pos - self[b].to_cart().pos
         return np.rad2deg(np.arccos(b2a.dot(b2c)/(np.linalg.norm(b2a)*np.linalg.norm(b2c))))
     
-    def angles(self, at_g1, at_g2, at_g3, mic = False):
+    def angles(self, at_g1: List[int], at_g2: List[int], at_g3: List[int], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
         """
         Calculates angles for multiple atom groups.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class Atoms(np.ndarray):
                 angles[i] = self.angle(pair[0],pair[1], pair[2], mic = mic)
         return pairs, angles
     
-    def dihedral(self, idx, mic = False):
+    def dihedral(self, idx: Union[List[int], Tuple[int, ...], List[np.ndarray]], mic: bool = False) -> float:
         """
         Calculates the dihedral angle defined by atoms or vectors.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -468,7 +468,7 @@ class Atoms(np.ndarray):
         delta = np.arccos(numerator/denominator)
         return np.rad2deg(delta)
     
-    def dihedrals(self, at_g, mic = False):
+    def dihedrals(self, at_g: List[List[int]], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
         """
         Calculates the dihedral angles for multiple atom groups.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -499,7 +499,7 @@ class Atoms(np.ndarray):
         delta = np.arccos(numerator/denominator)
         return pairs, np.rad2deg(delta)
     
-    def calc_com(self):
+    def calc_com(self) -> np.ndarray:
         """
         Calculates the centre of mass of atoms.
         """
@@ -507,13 +507,13 @@ class Atoms(np.ndarray):
         com = np.dot(masses, self.pos)/masses.sum()
         return com
     
-    def calc_cog(self):
+    def calc_cog(self) -> np.ndarray:
         """
         Calculate the centre of geometry.
         """
         return self.pos.mean(axis=0)
         
-    def wrap_pos(self, center=(0.5, 0.5, 0.5), pretty_translation=False, eps=1e-7):
+    def wrap_pos(self, center: Tuple[float, float, float] = (0.5, 0.5, 0.5), pretty_translation: bool = False, eps: float = 1e-7) -> 'Atoms':
 
         if isinstance(self.pbc[0], int):
             pbc = [True if x == 1 else False for x in self.pbc]
@@ -542,7 +542,7 @@ class Atoms(np.ndarray):
 
         return self
     
-    def at_sel(self, n, inverse_select = False):
+    def at_sel(self, n: Union[int, str, Tuple, List, slice], inverse_select: bool = False) -> Tuple[List[int], 'Atoms']:
         """
         Select by chemical symbols
         """

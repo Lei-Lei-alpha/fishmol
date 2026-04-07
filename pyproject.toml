@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fishmol"
+version = "0.0.1"
+description = "Molecular Dynamics Data Analysis Package"
+authors = [
+    {name = "Lei Lei", email = "Lei.Lei@durham.ac.uk"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+    "numpy>=1.14.5",
+    "recordclass>=0.17.2",
+    "ase>=3.22.1",
+    "iteration_utilities>=0.11.0",
+    "scipy",
+    "matplotlib"
+]
+
+[project.urls]
+Homepage = "https://github.com/Lei-Lei-alpha/FishMol"
+
+[project.optional-dependencies]
+plotting = ["matplotlib>=3.5.1", "colour>=0.1.5", "jupyter"]
+
+[project.scripts]
+fishmol = "fishmol.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fishmol*"]
+
+[tool.setuptools.package-data]
+examples = ["../examples/*.ipynb"]
+docs = ["../Docs/fishmo_doc.md"]
+test = ["../test/*.py"]
+license = ["../LICENCE"]
