@@ -62,7 +62,7 @@ class Atom(np.ndarray):
         Converts the coordinates to Cartesian and return a new Atom object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
-        out : Atom, new Atom object insured to have basis='Cartesian'.
+        out : Atom, new Atom object ensured to have basis='Cartesian'.
         """
         if self.basis in self.coord_names.cart_names:
             return self
@@ -73,9 +73,9 @@ class Atom(np.ndarray):
     def to_crys(self):
         """
         Converts the coordinates to Crystal and return a new Atom object.
-        Returns
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        out : Atom, new Atom object insured to have basis='Crystal'.
+        Returns
+        out : Atom, new Atom object ensured to have basis='Crystal'.
         """
         if self.basis in self.coord_names.crys_names:
             return self
@@ -91,10 +91,10 @@ class Atom(np.ndarray):
         basis : {'Cartesian', 'Crystal'}, basis to which the coordinates are converted.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
-        out : Atom, new Atom object insured to have basis=basis.
+        out : Atom, new Atom object ensured to have basis=basis.
         """
         
-        if basis in self.coord_names.cart_names:
+        if basis in self.coord_names.crys_names:
             return self.to_crys()
         elif basis in self.coord_names.cart_names:
             return self.to_cart()
@@ -166,7 +166,7 @@ class Atoms(np.ndarray):
             for i, letter in enumerate(symbs):
                 if letter.isdigit():
                     if i == 0:
-                        raise Exception("Wrong formmat, a valid chemical formula should start with a chemical symbol!")
+                        raise Exception("Wrong format, a valid chemical formula should start with a chemical symbol!")
                     else:
                         a += [a[i-1] for n in range(int(letter)-1)]
                 else:
@@ -244,7 +244,7 @@ class Atoms(np.ndarray):
             elif all(isinstance(x, int) for x in n):
                 select = n
             else:
-                raise Exception("Use indices only or chemical symbols only enumerates, mixed indices-chemical symbol selection is not enabled yet!")
+                raise Exception("Use only indices or only chemical symbols for iterables, mixed indices-chemical symbol selection is not enabled yet!")
         
         elif isinstance(n, slice):
             start = n.start
@@ -268,7 +268,7 @@ class Atoms(np.ndarray):
         Converts the coordinates to Cartesian and return a new Atoms object.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
-        out : Atoms, new Atoms object insured to have basis='Cartesian'.
+        out : Atoms, new Atoms object ensured to have basis='Cartesian'.
         """
         if self.basis in self.coord_names.cart_names:
             return self
@@ -284,7 +284,7 @@ class Atoms(np.ndarray):
         Converts the coordinates to Crystal and return a new Atom object.
         Returns
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        out : Atom, new Atom object insured to have basis='Crystal'.
+        out : Atom, new Atom object ensured to have basis='Crystal'.
         """
         if self.basis in self.coord_names.crys_names:
             return self
@@ -303,11 +303,11 @@ class Atoms(np.ndarray):
         basis : {'Cartesian', 'Crystal'}, basis to which the coordinates are converted.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
-        out : Atom, new Atom object insured to have basis=basis.
+        out : Atom, new Atom object ensured to have basis=basis.
         """
-        if basis in Atoms.crys_names:
+        if basis in self.coord_names.crys_names:
             return self.to_crys()
-        elif basis in Atoms.cart_names:
+        elif basis in self.coord_names.cart_names:
             return self.to_cart()
         else:
             raise NameError("Trying to convert to an unknown basis")
@@ -320,7 +320,7 @@ class Atoms(np.ndarray):
         a, b : int, indices of two atoms in the Atoms object. Required.
         absolute : boolean, if true, calculates the absolute vector in angstrom, otherwise calculates the vector with fractional positions. Default: True. Optional.
         normalise: boolean, if true, calculated the normalised vector, otherwise calculates the vector with a length equals to the distance between the two atoms m and n. Default: False. Optional.
-        mic: boolean, if true, wraps the atom within the cell and using minimum image convension. Default: False. Optional.
+        mic: boolean, if true, wraps the atom within the cell and using minimum image convention. Default: False. Optional.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : Array, vector connecting self and other with the same basis as self.
@@ -361,8 +361,8 @@ class Atoms(np.ndarray):
         Calculate the distance between two Atom objects.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Parameters
-        a, b : int, the indcices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convension.
+        a, b : int, the indices of atoms to be calculated.
+        mic : boolean, whether or not to use the minimum image convention.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : float, the distance between a and b Atoms.
@@ -378,11 +378,11 @@ class Atoms(np.ndarray):
     
     def dists(self, at_g1, at_g2, cutoff = None, mic = False):
         """
-        Calculates the distaces between two atom groups.
+        Calculates the distances between two atom groups.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Parameters
-        at_g1, at_g2 : lists of int, the indcices of atoms groups to be calculated.
-        mic : boolean, whether or not to use the minimum image convension.
+        at_g1, at_g2 : lists of int, the indices of atoms groups to be calculated.
+        mic : boolean, whether or not to use the minimum image convention.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : float, the distance between a and b Atoms.
@@ -405,8 +405,8 @@ class Atoms(np.ndarray):
         Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Parameters
-        a, b : int, the indcices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convension.
+        a, b : int, the indices of atoms to be calculated.
+        mic : boolean, whether or not to use the minimum image convention.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : float, the distance between a and b Atoms.
@@ -426,11 +426,11 @@ class Atoms(np.ndarray):
     
     def angles(self, at_g1, at_g2, at_g3, mic = False):
         """
-        Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.
+        Calculates angles for multiple atom groups.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Parameters
-        a, b : int, the indcices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convension.
+        at_g1, at_g2, at_g3 : list of int, the indices of atom groups to be calculated.
+        mic : boolean, whether or not to use the minimum image convention.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : np.array, the angles between atom groups at_g1, at_g2, at_g3.
@@ -445,11 +445,11 @@ class Atoms(np.ndarray):
     
     def dihedral(self, idx, mic = False):
         """
-        Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.
+        Calculates the dihedral angle defined by atoms or vectors.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Parameters
-        idx : list or tuple, the indcices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convension.
+        idx : list or tuple, the indices of atoms to be calculated.
+        mic : boolean, whether or not to use the minimum image convention.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : np.array, the dihedral angle.
@@ -470,11 +470,11 @@ class Atoms(np.ndarray):
     
     def dihedrals(self, at_g, mic = False):
         """
-        Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.
+        Calculates the dihedral angles for multiple atom groups.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Parameters
-        idx : list or tuple, the indcices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convension.
+        at_g : list or tuple, the indices of atom groups to be calculated.
+        mic : boolean, whether or not to use the minimum image convention.
         -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         Returns
         out : np.array, the dihedral angle.
@@ -592,12 +592,8 @@ class Atoms(np.ndarray):
         else:
             raise TypeError("Invalid argument type.")
         try:
-            atoms = self.__class__(symbs = self.symbs[select], pos = self.pos[select], cell = self.cell, basis = self.basis, pbc = self.pbc)
+            atoms = self.__class__(symbs=self.symbs[select], pos=self.pos[select], cell=self.cell, basis=self.basis, pbc=self.pbc)
         except IndexError:
-                atoms = self.__class__(symbs = self.symbs[list(itertools.chain.from_iterable(select))],
-                                       pos = self.pos[list(itertools.chain.from_iterable(idx))], cell = self.cell, basis = self.basis, pbc = self.pbc)
+            select_flat = list(itertools.chain.from_iterable(select))
+            atoms = self.__class__(symbs=self.symbs[select_flat], pos=self.pos[select_flat], cell=self.cell, basis=self.basis, pbc=self.pbc)
         return select, atoms
-        
-    # def autobond(self):
-    
-    # def at_group(self):

@@ -1,7 +1,8 @@
 """A range of functions to analyse the trajectory object"""
 
 import numpy as np
-from recordclass import make_dataclass
+import itertools
+from recordclass import make_dataclass, asdict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from fishmol.utils import to_sublists, make_comb, update_progress
@@ -157,9 +158,9 @@ class ADF(object):
         
         # Calculate ADF
         if cone_correction:
-            self.results.adf = np.asarray(self.results.count / (NA * NB * NC * np.sin(self.results.x * np.pi / 180))) # cone correction, convert degree to radians
+            self.results.adf = np.asarray(self.results.count / (NA * NB * NC * self.traj.nframes * np.sin(self.results.x * np.pi / 180))) # cone correction, convert degree to radians
         else:
-            self.results.adf = np.asarray(self.results.count / (NA * NB * NC))
+            self.results.adf = np.asarray(self.results.count / (NA * NB * NC * self.traj.nframes))
         
         if plot:
             fig, ax = plt.subplots(figsize = (4.2, 3.6))
@@ -235,7 +236,7 @@ class DDF(object):
         N = len(pairs)
         
         # Calculate DDF
-        self.results.ddf = np.asarray(self.results.count) / N
+        self.results.ddf = np.asarray(self.results.count) / (N * self.traj.nframes)
         
         if plot:
             fig, ax = plt.subplots(figsize = (4.2, 3.6))
@@ -312,7 +313,7 @@ class CDF(object):
 
             X, Y = np.meshgrid(self.s1.x, self.s2.x)
             levels = np.linspace(self.results.cdf.min(), self.results.cdf.max(), 50)
-            CS = ax.contourf(X, Y, self.results.cdf, cmap = color_ramp, levels = levels)
+            CS = ax.contourf(X, Y, self.results.cdf, cmap = style.cdf_cmap, levels = levels)
 
             # ax.set_xlabel(r"$r$ ($\AA$)")
             # ax.set_ylabel(r"$\alpha$ ($^{\circ}$)")
@@ -400,39 +401,42 @@ class VRD(object):
         # If the vec is an array of vectors without traj
         else:
             vec_chunks = to_sublists(self.spec, self.num)[::self.skip]
-            dot_products = np.zeros((len(frame_chunks), len(self.results.t), len(combs)))
-            for i, vec_chunk in len(vec_chunks):
+            dot_products = np.zeros((len(vec_chunks), len(self.results.t)))
+            for i, vec_chunk in enumerate(vec_chunks):
                 select = vec_chunk[::self.sampling]
-                dot_products[i] = np.asarray([vecs.dot(vec_chunk[0]) / (np.linalg.norm(vecs) * vecs(vec_chunk[0])) for vecs in vec_chunk])
-                update_progress(i / len(frame_chunks))
+                dot_products[i] = np.asarray([vecs.dot(select[0]) / (np.linalg.norm(vecs) * np.linalg.norm(select[0])) for vecs in select])
+                update_progress(i / len(vec_chunks))
 
-        
+        n_chunks = len(frame_chunks) if self.traj is not None else len(vec_chunks)
+        if mean:
+            if self.traj is not None:
+                dot_products = np.hstack(dot_products)
+            else:
+                dot_products = dot_products.T
+                
         if l == 1:
             if mean:
-                dot_products = np.hstack(dot_products)
                 self.results.C_t = dot_products.mean(axis = 1)
-                self.results.C_t_error = dot_products.std(axis = 1) / (len(frame_chunks))**0.5
+                self.results.C_t_error = dot_products.std(axis = 1) / (n_chunks)**0.5
             else:
                 self.results.C_t = dot_products.mean(axis = 0)
-                self.results.C_t_error = dot_products.std(axis = 0) / (len(frame_chunks))**0.5
+                self.results.C_t_error = dot_products.std(axis = 0) / (n_chunks)**0.5
         
         elif l == 2:
             if mean:
-                dot_products = np.hstack(dot_products)
                 self.results.C_t = ((3 * (dot_products)**2 - 1)/2).mean(axis = 1)
-                self.results.C_t_error = ((3 * (dot_products)**2 - 1)/2).std(axis = 1) / (len(frame_chunks))**0.5
+                self.results.C_t_error = ((3 * (dot_products)**2 - 1)/2).std(axis = 1) / (n_chunks)**0.5
             else:
                 self.results.C_t = ((3 * (dot_products)**2 - 1)/2).mean(axis = 0)
-                self.results.C_t_error = ((3 * (dot_products)**2 - 1)/2).std(axis = 0) / (len(frame_chunks))**0.5
+                self.results.C_t_error = ((3 * (dot_products)**2 - 1)/2).std(axis = 0) / (n_chunks)**0.5
 
         elif l == 3:
             if mean:
-                dot_products = np.hstack(dot_products)
                 self.results.C_t = ((5 * (dot_products)**3 - 3 * (dot_products))/2).mean(axis = 1)
-                self.results.C_t_error = (((5 * (dot_products)**3 - 3 * (dot_products))/2)).std(axis = 1) / (len(frame_chunks))**0.5
+                self.results.C_t_error = (((5 * (dot_products)**3 - 3 * (dot_products))/2)).std(axis = 1) / (n_chunks)**0.5
             else:
                 self.results.C_t = ((5 * (dot_products)**3 - 3 * (dot_products))/2).mean(axis = 0)
-                self.results.C_t_error = (((5 * (dot_products)**3 - 3 * (dot_products))/2)).std(axis = 0) / (len(frame_chunks))**0.5
+                self.results.C_t_error = (((5 * (dot_products)**3 - 3 * (dot_products))/2)).std(axis = 0) / (n_chunks)**0.5
         
         else:
             raise ValueError("l = 1, 2 or 3")
@@ -469,7 +473,9 @@ class VRD(object):
         update_progress(1)
         
         # delete temp variable to release some memory
-        del frame_chunks, dot_products, select
+        if 'frame_chunks' in locals(): del frame_chunks
+        if 'vec_chunks' in locals(): del vec_chunks
+        del dot_products, select
         
         # Plot the results    
         if plot:
