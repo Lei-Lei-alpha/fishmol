@@ -42,28 +42,42 @@ A pure-Python package for post-processing molecular dynamics trajectories.
 ## Requirements
 
 - Python ≥ 3.8
-- [NumPy](https://numpy.org/)
-- [SciPy](https://scipy.org/)
-- [matplotlib](https://matplotlib.org/)
-- [pandas](https://pandas.pydata.org/)
-- [recordclass](https://pypi.org/project/recordclass/)
-- [iteration_utilities](https://pypi.org/project/iteration-utilities/)
-- [colour](https://pypi.org/project/colour/)
-- [ASE](https://wiki.fysik.dtu.dk/ase/) (for visualisation)
+- [NumPy](https://numpy.org/) ≥ 1.21
+- [SciPy](https://scipy.org/) ≥ 1.7
+- [matplotlib](https://matplotlib.org/) ≥ 3.5
+- [recordclass](https://pypi.org/project/recordclass/) ≥ 0.17.2
+- [iteration_utilities](https://pypi.org/project/iteration-utilities/) ≥ 0.11.0
+- [colour](https://pypi.org/project/colour/) ≥ 0.1.5
+- [ASE](https://wiki.fysik.dtu.dk/ase/) ≥ 3.22.1 (optional, for 3-D visualisation)
 
 ## Installation
 
-FishMol is in active development. Install directly from source:
+### From PyPI (recommended)
 
 ```bash
-# 1. Clone the repository
+pip install fishmol
+```
+
+To include the optional 3-D visualisation backend ([ASE](https://wiki.fysik.dtu.dk/ase/)):
+
+```bash
+pip install fishmol[vis]
+```
+
+Verify the installation:
+
+```bash
+fishmol
+```
+
+### From source
+
+For the latest development version or to contribute:
+
+```bash
 git clone https://github.com/Lei-Lei-alpha/fishmol.git
 cd fishmol
-
-# 2. Install in editable mode (dependencies resolved automatically)
-pip install -e ./
-
-# 3. Verify the installation
+pip install -e ".[vis]"   # omit [vis] if you don't need visualisation
 fishmol
 ```
 
