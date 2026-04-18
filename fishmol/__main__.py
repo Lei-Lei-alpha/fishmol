@@ -25,7 +25,7 @@ ascii_fishmol = """\
                         ▀▀▀█████████████████▀▀▀▀        ▀■                    ▀█▀
                              ▀▀▀███████▀▀
                                  ▀████
-                                    ▀▀▄                Contact: Lei.Lei@durham.ac.uk
+                                    ▀▀▄            Contact: Lei.Lei2@nottingham.ac.uk
 """
 
 def main():

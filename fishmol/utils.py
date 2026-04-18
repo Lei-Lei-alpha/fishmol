@@ -202,7 +202,7 @@ def calc_freq(regions: Sequence[Any], timestep: Optional[float] = None) -> float
         else:
             pass
         
-        freq = count * 5/ ((i + 1) * 1000)
+        freq = count * timestep / ((i + 1) * 1000)
         
     return freq
 

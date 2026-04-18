@@ -18,7 +18,7 @@ class Atom(np.ndarray):
         crys_names = ['Crystal', 'Crys', 'Cr', 'S']
         cart_names = ['Cartesian', 'Cart', 'Ca', 'R']
         coord_names = make_dataclass("Coord_names", 'crys_names cart_names')
-        dt = np.dtype([('symb', np.unicode_, 2), ('pos', np.float64, (3,))])
+        dt = np.dtype([('symb', np.str_, 2), ('pos', np.float64, (3,))])
         obj = np.asarray([(symb, pos)], dtype=dt).view(cls)
         obj._symb = symb
         obj._pos = pos
@@ -154,7 +154,7 @@ class Atoms(np.ndarray):
     basis : {'Cartesian', 'Crystal'}, Describes whether the array contains crystal or cartesian coordinates.
     """
     def __new__(cls, symbs: Union[List[str], str, np.ndarray], pos: Union[List[List[float]], np.ndarray], cell: Any = None, basis: str ='Cartesian', pbc: Tuple[int, int, int] = (1,1,1)) -> 'Atoms':
-        dt = np.dtype([('symbol', np.unicode_, 2), ('position', np.float64, (3,))])
+        dt = np.dtype([('symbol', np.str_, 2), ('position', np.float64, (3,))])
         dc_cell = make_dataclass("Cell", 'lattice')
         crys_names = ['Crystal', 'Crys', 'Cr', 'S']
         cart_names = ['Cartesian', 'Cart', 'Ca', 'R']
@@ -173,7 +173,7 @@ class Atoms(np.ndarray):
                     a += [letter]
             symbs = np.array(a, dtype = "<U2")
         pos =  np.array(pos, dtype = np.float64)
-        obj = np.asarray([np.array((symb, position), dtype=dt)] for symb, position in zip(symbs, pos)).view(cls)
+        obj = np.asarray(list(zip(symbs, pos)), dtype=dt).view(cls)
         obj._symbs = symbs
         obj._pos = pos
         obj._basis = basis
@@ -277,6 +277,7 @@ class Atoms(np.ndarray):
                 print("Cell \U0001F35E not defined, cannot convert to absolute atom positions!")
             else:
                 self.pos = xys2cart(self.pos, self.cell)
+                self._basis = self.coord_names.cart_names[0]
             return self
 
     def to_crys(self) -> 'Atoms':
@@ -293,6 +294,7 @@ class Atoms(np.ndarray):
                 print("\U0001F35E Cell not defined, cannot convert to fractional atom positions!")
             else:
                 self.pos = cart2xys(self.pos, self.cell)
+                self._basis = self.coord_names.crys_names[0]
             return self
 
     def to_basis(self, basis: str) -> 'Atoms':
@@ -422,7 +424,8 @@ class Atoms(np.ndarray):
         else:
             b2a = self[a].to_cart().pos - self[b].to_cart().pos
             b2c = self[c].to_cart().pos - self[b].to_cart().pos
-        return np.rad2deg(np.arccos(b2a.dot(b2c)/(np.linalg.norm(b2a)*np.linalg.norm(b2c))))
+        cos_val = np.clip(b2a.dot(b2c) / (np.linalg.norm(b2a) * np.linalg.norm(b2c)), -1.0, 1.0)
+        return np.rad2deg(np.arccos(cos_val))
     
     def angles(self, at_g1: List[int], at_g2: List[int], at_g3: List[int], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
         """
@@ -463,10 +466,10 @@ class Atoms(np.ndarray):
             vec1, vec2, vec3 = self.vec(idx[0],idx[1], mic = mic), self.vec(idx[2],idx[3], mic = mic), self.vec(idx[4],idx[5], mic = mic)
         else:
             raise Exception("Wrong length of indices, please specify exactly four or six atoms.")
-        numerator = np.dot(np.cross(vec1, vec3), np.cross(vec2, vec3).T)
-        denominator = np.linalg.norm(np.cross(vec1, vec3)) * np.linalg.norm(np.cross(vec2, vec3))
-        delta = np.arccos(numerator/denominator)
-        return np.rad2deg(delta)
+        n1 = np.cross(vec1, vec2)
+        n2 = np.cross(vec2, vec3)
+        cos_val = np.clip(np.dot(n1, n2) / (np.linalg.norm(n1) * np.linalg.norm(n2)), -1.0, 1.0)
+        return np.rad2deg(np.arccos(cos_val))
     
     def dihedrals(self, at_g: List[List[int]], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
         """
@@ -494,10 +497,10 @@ class Atoms(np.ndarray):
             vec3 = np.asarray([self.vec(idx[4], idx[5], mic = mic) for idx in pairs])
         else:
             raise Exception("Wrong length of atom groups, please specify exactly four or six atom groups.")
-        numerator = np.diagonal(np.dot(np.cross(vec1, vec3), np.cross(vec2, vec3).T)) # drop  np.cross(a, c)[0].dot(np.cross(b, c)[1])
-        denominator = np.linalg.norm(np.cross(vec1, vec3), axis = 1) * np.linalg.norm(np.cross(vec2, vec3), axis = 1)
-        delta = np.arccos(numerator/denominator)
-        return pairs, np.rad2deg(delta)
+        n1 = np.cross(vec1, vec2)
+        n2 = np.cross(vec2, vec3)
+        cos_vals = np.clip(np.einsum('ij,ij->i', n1, n2) / (np.linalg.norm(n1, axis=1) * np.linalg.norm(n2, axis=1)), -1.0, 1.0)
+        return pairs, np.rad2deg(np.arccos(cos_vals))
     
     def calc_com(self) -> np.ndarray:
         """

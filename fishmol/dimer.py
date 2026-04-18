@@ -9,7 +9,9 @@ from iteration_utilities import deepflatten
 import matplotlib.pyplot as plt
 from colour import Color
 from matplotlib.colors import LinearSegmentedColormap
-from fishmol.utils import to_sublists, update_progress, mic_dist
+from fishmol.utils import to_sublists, update_progress, mic_dist, retrieve_symbol
+from scipy.optimize import curve_fit
+from scipy.integrate import quad
 from matplotlib.ticker import MultipleLocator
 
 plt.rcParams.update({
@@ -458,7 +460,7 @@ def find_d_a(atoms_dict):
                 combs = [{"O": a_dict["O"], x: a_dict[x]} for x in list(a_dict.keys()) if x != "O"]
                 donors += (combs[0], combs[1])
                 acceptors += ({"O": a_dict["O"]},)
-    print(f"Done! {len(donors)} donors and {len(donors)} acceptors were found!\n" + "Acceptors:\n", acceptors, "\n Donors:\n", donors)
+    print(f"Done! {len(donors)} donors and {len(acceptors)} acceptors were found!\n" + "Acceptors:\n", acceptors, "\n Donors:\n", donors)
     return donors, acceptors
 
 def pair_d_a(donors, acceptors):
@@ -484,7 +486,7 @@ def pair_d_a(donors, acceptors):
                 for key in keys:
                     d_a_pairs += [[d_atom[0], {key: acceptor[key]}],]
                     d_h_a_pairs += [[donor, {key: acceptor[key]}],]
-    print(f"Unique donoar-acceptor/donoar-hydrogen-acceptor combinations: {len(d_a_pairs)}")
+    print(f"Unique donor-acceptor/donor-hydrogen-acceptor combinations: {len(d_a_pairs)}")
     print(f"Sample donor-acceptor pair: {d_a_pairs[0]}\nSample donor-hydrogen-acceptor pair: {d_h_a_pairs[0]}")
     return d_a_pairs, d_h_a_pairs
 
@@ -591,9 +593,9 @@ def auto_cor(data = "hbonds.json", nframes = 1000, skip = 100, index = ":", time
                 d_a_list = [[hbonds[x]["donor"], hbonds[x]["acceptor"]] for x in range(len(hbonds))] # start point of h-bonds
 
                 # Iterate through the elements in hbonds_0, if any hbond breaks (not in the list of hbonds in a frame), remove the hbond from d_a_list_0, and nbonds decreases by one
-                for k, item in enumerate(d_a_list_0):
+                for item in list(d_a_list_0):
                     if item not in d_a_list:
-                        d_a_list_0.pop(k)
+                        d_a_list_0.remove(item)
                         nbonds -= 1
                 # Calculate the C(t)
                 C_t.append(nbonds*nbonds_0/nbonds_0**2)

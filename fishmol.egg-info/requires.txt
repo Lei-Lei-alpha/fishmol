@@ -1,9 +1,0 @@
-numpy>=1.14.5
-recordclass>=0.17.2
-ase>=3.22.1
-iteration_utilities>=0.11.0
-
-[plotting]
-matplotlib>=3.5.1
-colour>=0.1.5
-jupyter

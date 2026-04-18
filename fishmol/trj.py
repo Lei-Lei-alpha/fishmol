@@ -2,7 +2,7 @@ import mmap
 import numpy as np
 import os
 import warnings
-from typing import List, Union, Optional, Any, Sequence
+from typing import List, Tuple, Union, Optional, Any, Sequence
 from fishmol.atoms import Atoms
 
 class Trajectory(object):
@@ -43,6 +43,7 @@ class Trajectory(object):
         """
         Enable slicing and selecting frames from a Trajectory, returns a new Trajectory object.
         """
+        new_timestep = self.timestep
         if isinstance(n, int):
             if n < 0 : #Handle negative indices
                 n += self.nframes
@@ -51,7 +52,7 @@ class Trajectory(object):
                 raise IndexError("The index (%d) is out of range."%n)
             frames = [self.frames[n],]
         elif isinstance(n, tuple) or isinstance(n, list):
-            frames = [self.frames[x] for x in n] 
+            frames = [self.frames[x] for x in n]
         elif isinstance(n, slice):
             start = n.start
             stop = n.stop
@@ -63,10 +64,10 @@ class Trajectory(object):
             if step is None:
                 step = 1
             frames = [self.frames[x] for x in range(start, stop, step)]
-            self.timestep *= step
+            new_timestep = self.timestep * step
         else:
             raise TypeError("Invalid argument type.")
-        return self.__class__(timestep = self.timestep, natoms = self.natoms, nframes = len(frames), frames = frames, index = n, cell = self.cell)
+        return self.__class__(timestep=new_timestep, natoms=self.natoms, nframes=len(frames), frames=frames, index=n, cell=self.cell)
     
     def read(self, data: str) -> tuple:
         """
@@ -80,7 +81,7 @@ class Trajectory(object):
         header = frames[0]
         natoms = int(header)
         prop = frames[1].split("=")
-        dt = np.dtype([('symbol', np.unicode_, 2), ('position', np.float64, (3,))]) # numpy datatype object, element symbol is string , the position is an array of 3 floats
+        dt = np.dtype([('symbol', np.str_, 2), ('position', np.float64, (3,))]) # numpy datatype object, element symbol is string , the position is an array of 3 floats
         # Store each line as a numpy array
         index = self.index
         nframes = frames.count(frames[0])
@@ -129,7 +130,7 @@ class Trajectory(object):
             for i, frame in enumerate(self.frames):
                 f.write(str(self.natoms) + f"\n Properties = frame: {i}, t: {i*self.timestep} fs, Cell: {self.cell}\n")
                 np.savetxt(f, np.concatenate(((frame.symbs).reshape((self.natoms,1)), frame.pos), axis=1),
-                           delimiter=',', fmt = "%-2s %-2s %-2s %-2s")
+                           fmt="%-2s %s %s %s")
             f.close()
     
     def calib(self, save: bool = False, filename: Optional[str] = None) -> 'Trajectory':

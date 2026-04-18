@@ -1,7 +1,16 @@
-# python cache
-__pycache__
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
 
-# jupyter notebook checkpoints
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Jupyter notebook checkpoints
 .ipynb_checkpoints
 
 docs/cage_data/cage1-500K.xyz
