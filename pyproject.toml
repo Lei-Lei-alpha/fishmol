@@ -1,31 +1,58 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "fishmol"
 version = "0.0.1"
-description = "Molecular Dynamics Data Analysis Package"
-authors = [
-    {name = "Lei Lei", email = "Lei.Lei2@nottingham.ac.uk"}
-]
+description = "Pure-Python post-processing package for molecular dynamics trajectories"
 readme = "README.md"
-license = {text = "MIT"}
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Lei Lei", email = "Lei.Lei@durham.ac.uk"}
+]
+keywords = [
+    "molecular dynamics", "trajectory analysis", "radial distribution function",
+    "mean square displacement", "diffusion", "hydrogen bond", "computational chemistry"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Operating System :: OS Independent",
+]
 dependencies = [
-    "numpy>=1.14.5",
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "matplotlib>=3.5",
     "recordclass>=0.17.2",
-    "ase>=3.22.1",
     "iteration_utilities>=0.11.0",
-    "scipy",
-    "matplotlib",
-    "colour"
+    "colour>=0.1.5",
+]
+
+[project.optional-dependencies]
+vis = ["ase>=3.22.1", "jupyter"]
+dev = [
+    "build",
+    "twine",
+    "pytest>=7",
+    "pytest-cov",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Lei-Lei-alpha/FishMol"
-
-[project.optional-dependencies]
-plotting = ["matplotlib>=3.5.1", "colour>=0.1.5", "jupyter"]
+Documentation = "https://lei-lei-alpha.github.io/fishmol"
+"Bug Tracker" = "https://github.com/Lei-Lei-alpha/FishMol/issues"
+Source = "https://github.com/Lei-Lei-alpha/FishMol"
 
 [project.scripts]
 fishmol = "fishmol.__main__:main"
@@ -33,9 +60,3 @@ fishmol = "fishmol.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fishmol*"]
-
-[tool.setuptools.package-data]
-examples = ["../examples/*.ipynb"]
-docs = ["../Docs/fishmo_doc.md"]
-test = ["../test/*.py"]
-license = ["../LICENCE"]
