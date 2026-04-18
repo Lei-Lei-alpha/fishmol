@@ -15,12 +15,10 @@ from scipy.integrate import quad
 from matplotlib.ticker import MultipleLocator
 
 plt.rcParams.update({
-    "font.size": 13,
+    "font.size": 9,
     "font.family": "sans-serif",
-    # "font.sans-serif": "Arial",
-    # "font.weight": "heavy",
-    "xtick.labelsize": 13,
-    "ytick.labelsize": 13,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
     "figure.figsize": (4.2,3.6),
     "figure.subplot.left": 0.21,
     "figure.subplot.right": 0.96,
