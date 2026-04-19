@@ -23,7 +23,7 @@ A pure-Python package for post-processing molecular dynamics trajectories.
                         ▀▀▀█████████████████▀▀▀▀        ▀■                    ▀█▀
                              ▀▀▀███████▀▀
                                  ▀████
-                                    ▀▀▄                Contact: Lei.Lei@durham.ac.uk
+                                    ▀▀▄                Contact: Lei.Lei2@nottingham.ac.uk
 ```
 
 ## Features
