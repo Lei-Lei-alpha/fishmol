@@ -15,5 +15,7 @@ build/
 
 # Jupyter Book build output
 docs/_build/
+_build/
 
 docs/cage_data/cage1-500K.xyz
+.github/workflows/docs.yml
