@@ -1,0 +1,28 @@
+name: Build and deploy docs
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install jupyter-book ghp-import
+          pip install -e ".[vis]"
+
+      - name: Build book
+        run: jupyter-book build docs/
+
+      - name: Deploy to gh-pages
+        run: ghp-import -n -p -f docs/_build/html
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
