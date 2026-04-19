@@ -4,7 +4,7 @@ A pure-Python package for post-processing molecular dynamics trajectories.
 
 ```
                   Welcome!                    ▄▄█▀                  FishMol
-                                          ▄▄███▀                 version 0.0.1
+                                          ▄▄███▀                 version 0.1.0
       ○                                ▄▄█████▀                          ○
            ○                        ▄▄████████▄                         /
                                 ▄▄▄████████████▄                    ○--○
