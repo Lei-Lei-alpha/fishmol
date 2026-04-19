@@ -13,4 +13,7 @@ build/
 # Jupyter notebook checkpoints
 .ipynb_checkpoints
 
+# Jupyter Book build output
+docs/_build/
+
 docs/cage_data/cage1-500K.xyz
