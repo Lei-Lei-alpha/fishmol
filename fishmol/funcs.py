@@ -1357,3 +1357,177 @@ class VHCF(object):
             print("    - The rate at which the collective 'cage' dissolves. Starts at a value ")
             print("      proportional to S(k)-1 and decays to 0 as the structure randomizes.")
         print("="*75)
+
+
+# SDF
+class SDF(object):
+    """Scalar distribution function g(δ) for an arbitrary observable.
+
+    The SDF computes the normalised probability density of any scalar quantity δ
+    extracted from a trajectory — for example a bond length, torsion angle,
+    coordination number, or an energy-like observable.  It is defined as
+
+        g(δ) = count(δ) / (N · Δδ)
+
+    where N is the total number of observations and Δδ is the bin width, so that
+    ∫ g(δ) dδ = 1.
+
+    This is a general-purpose wrapper around :func:`numpy.histogram` that attaches
+    the result to a results dataclass and optionally produces a publication-ready
+    line plot or a combined time-series / distribution panel.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object.  Used only to derive the time axis for the optional
+        time-series panel; the scalar observations are passed separately via
+        *scaler*.
+    scaler : array-like, shape (N,)
+        Pre-computed scalar observations.  Typically one value per trajectory
+        frame, but any 1-D sequence is accepted.
+    nbins : int, optional
+        Number of histogram bins (controls resolution). Default: 200.
+    range : tuple of float, optional
+        (δ_min, δ_max) over which the SDF is computed.  If *None* the data
+        range [min(scaler), max(scaler)] is used automatically.
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    x        : ndarray, shape (nbins,) — bin-centre values of δ.
+    sdf      : ndarray, shape (nbins,) — normalised probability density g(δ).
+    count    : ndarray, shape (nbins,) — raw histogram counts.
+    edges    : ndarray, shape (nbins+1,) — bin edges.
+    t        : ndarray — time axis in ps derived from traj.timestep.
+    scaler   : ndarray — the scalar observations as supplied.
+    plot     : Figure or None — line-plot figure if plot=True was requested.
+    com_plot : Figure or None — combined time-series/SDF figure if com_plot=True.
+
+    Examples
+    --------
+    >>> oh_dists = [frame.dist(0, 1, mic=True) for frame in traj.frames]
+    >>> sdf = SDF(traj, scaler=oh_dists, nbins=150, range=(0.5, 3.5))
+    >>> results = sdf.calculate(plot=True, x_label=r"$r_{OH}$ (Å)")
+    """
+
+    def __init__(self, traj, scaler, nbins=200, range=None):
+        self.traj = traj
+        scaler_arr = np.asarray(scaler, dtype=float)
+        if range is None:
+            range = (float(scaler_arr.min()), float(scaler_arr.max()))
+        settings_dc = make_dataclass("Settings", "bins range")
+        self.settings = settings_dc(nbins, range)
+        results_dc = make_dataclass("Results", "edges count x sdf plot t scaler com_plot")
+        self.results = results_dc
+        self.results.scaler = scaler_arr
+        self.results.t = np.linspace(
+            0,
+            self.traj.timestep * (self.traj.nframes - 1) / 1000,
+            self.traj.nframes,
+        )
+        self.results.plot = None
+        self.results.com_plot = None
+
+    def calculate(self, plot=False, x_label=None, y_label=None, com_plot=False, **kwargs):
+        """Compute the scalar distribution function and optionally plot results.
+
+        Parameters
+        ----------
+        plot : bool, optional
+            If True, produce a line plot of g(δ) vs δ.
+        x_label : str, optional
+            x-axis label for the line plot and time-series panel.
+            Default: ``r"$\\delta$"``.
+        y_label : str, optional
+            y-axis label (g(δ) axis). Default: ``r"$g(\\delta)$"``.
+        com_plot : bool, optional
+            If True, produce a combined figure with a time-series panel on the
+            left and a rotated SDF panel on the right, sharing the δ axis.
+        **kwargs
+            Additional keyword arguments forwarded to
+            :func:`matplotlib.pyplot.plot`.
+
+        Returns
+        -------
+        results : dataclass
+            Populated results dataclass (see class docstring).
+
+        Notes
+        -----
+        The distribution is normalised so that ∫ g(δ) dδ = 1.  Dividing the
+        raw counts by N · Δδ gives a true probability density rather than a
+        count histogram, making results comparable across different bin widths
+        and dataset sizes.
+
+        Interpretation
+        --------------
+        - The peak position of g(δ) identifies the most probable value of the
+          observable — e.g., the preferred bond length or torsion angle.
+        - The width (FWHM) reflects the thermal fluctuations: broader peaks
+          indicate a more flexible degree of freedom.
+        - For bond lengths, compare the peak position with crystallographic values
+          to assess force-field accuracy.
+        - For torsion angles, distinct peaks at ±60°/180° indicate gauche/trans
+          populations characteristic of chain conformation statistics.
+        """
+        count, edges = np.histogram(self.results.scaler, **asdict(self.settings))
+        self.results.edges = edges
+        self.results.count = count
+        self.results.x = (edges[:-1] + edges[1:]) / 2
+        bin_width = edges[1] - edges[0]
+        N = int(self.results.scaler.shape[0])
+        self.results.sdf = count / (N * bin_width)
+
+        if plot:
+            fig, ax = plt.subplots(figsize=(4.2, 3.6))
+            ax.plot(self.results.x, self.results.sdf, **kwargs)
+            ax.set_xlabel(r"$\delta$" if x_label is None else x_label)
+            ax.set_ylabel(r"$g(\delta)$" if y_label is None else y_label)
+            plt.tight_layout()
+            plt.show()
+            self.results.plot = fig
+
+        if com_plot:
+            t = self.results.t
+            scaler = self.results.scaler
+            if len(scaler) != len(t):
+                warnings.warn(
+                    "Length of scaler array does not match traj.nframes; "
+                    "the time-series panel may be misleading."
+                )
+            n_pts = min(len(scaler), len(t))
+            fig = plt.figure(figsize=(4.8, 3.6))
+            ax = fig.add_axes([0.20, 0.16, 0.56, 0.75])
+            ax.plot(t[:n_pts], scaler[:n_pts], **kwargs)
+            ax.set_xlabel(r"$t$ (ps)")
+            ax.set_ylabel(r"$\delta$" if x_label is None else x_label)
+
+            divider = make_axes_locatable(ax)
+            ax_hist = divider.append_axes("right", 0.5, pad=0.05, sharey=ax)
+            ax_hist.yaxis.tick_right()
+            ax_hist.plot(self.results.sdf, self.results.x, **kwargs)
+            ax_hist.set_xlabel(r"$g(\delta)$" if y_label is None else y_label)
+            plt.show()
+            self.results.com_plot = fig
+
+        peak_idx = np.argmax(self.results.sdf)
+        mean_val = np.average(self.results.x, weights=self.results.sdf)
+
+        print("")
+        print(" Scalar Distribution Function (SDF)")
+        print("=" * 50)
+        print(f"  Observations  : {N}")
+        print(f"  Bins          : {self.settings.bins}")
+        print(f"  Range         : [{self.settings.range[0]:.4g}, {self.settings.range[1]:.4g}]")
+        print(f"  Peak at δ     : {self.results.x[peak_idx]:.4g}")
+        print(f"  Weighted mean : {mean_val:.4g}")
+        print("=" * 50)
+        print("")
+        print(" Interpretation:")
+        print("  - Peak position: the most probable value of the observable.")
+        print("  - Peak width (FWHM): reflects thermal fluctuations; broader")
+        print("    peaks indicate a more flexible degree of freedom.")
+        print("  - Weighted mean: centre of mass of the distribution,")
+        print("    equal to <δ> averaged over all observations.")
+        print("=" * 50)
+
+        return self.results

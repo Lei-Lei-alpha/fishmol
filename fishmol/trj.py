@@ -170,13 +170,3 @@ def frame2atoms(frame: np.ndarray, cell: Any = None, basis: str = 'Cartesian') -
     pos = frame[:]["position"]
     atoms = Atoms(symbs = symbs, pos = pos, cell = cell, basis = basis)
     return atoms
-    """
-    To do:
-    - Enable distance calculation
-    - Find bonds by distance
-    - Auto find molecules by bonds
-    - Auto find hydrogen bond donors by distance
-    - Generate all possible H-bond donor-acceptor pairs
-    - Generate d_a pair, d_h_a pairs for H-bond analysis
-    - Dynamic select by distance etc.
-    """

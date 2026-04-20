@@ -31,21 +31,64 @@ ramp_colors = ["#ffffff", "#9ecae1", "#2166ac", "#1a9850", "#ffff33", "#b2182b",
 color_ramp = LinearSegmentedColormap.from_list( 'my_list', [ Color( c1 ).rgb for c1 in ramp_colors ] )
 
 class dimers(object):
-    """The dimers in each frame of a trajectory
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    at_g1 : list, the indices of the donors of H-bonds or one of the molecules that forms the dimer. For the case of H-bond donors, pass the indices as a list in the following format[D, [H1, H2, ...]] (eg:  for two water molecules whose indices are O: 0, H: 1, H: 2; and O: 8, H: 9, H: 10, the at_g1 should be [[0, [1, 2]], [8, [9, 10]]].
-    at_g2 : list or tuple, the indices of the acceptors or the ther molcecule the forms the dimer.
-    criteria : list of geometry criteria for the specified atoms to be regarded as pairs. Accepted format for distance:
-        1. number + vdw_sum or number + coval_sum. eg: 1.05vdw_sum or 1.1coval_sum, which keep all pairs whose distances are smaller than their sum of van der Waals radii times 1.05 or their sum of covalency radii times 1.1. Plese set com = False when using this type of distance criteria.
-        2. Number specifying the distance of two atoms (or the distance of the centre of masses of two atom groups by setting com = True) in angstroms.
-        For angles, pass the angle of donor-H⋅⋅⋅acceptor (∠DHA). It also possible to use a flexible angle criteria to take the dynamics into consideration. To do this, pass a string containing a number of specifying the desired angle in degree and the letter "f", eg: "120f".
-    com : wether to use the centre of mass of the atom groups in the distance calculation. Set com = True if the atoms groups are two lists of molecules.
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Methods:
-    make_pairs: prepare the unique pairs from given atom groups for further filter based on given criteria. Returns None, the pairs are stored in results.pairs.
-    pair_filter: filter the pairs and find dimers in each frame of the trajectory according to the specified criteria. Returns None, the dimers in each frame of the trajectory are stored in results.dimers. If a filename is specified, the resolved dimer data will be writen in the give file name in .json format.
+    """Frame-by-frame dimer pair detection from geometry criteria.
+
+    A *dimer* is defined as any pair of atoms (or atom groups) whose
+    inter-atomic distance — and optionally the D–H···A angle for hydrogen-bond
+    donors — satisfies user-supplied geometry thresholds in a given trajectory
+    frame.  The class covers three use cases:
+
+    1. **Simple atom-pair dimers** — two lists of atom indices; distance only.
+    2. **Centre-of-mass dimers** — two lists of molecule indices; CoM distance.
+    3. **Hydrogen-bond dimers** — donor list formatted as [D, [H1, H2, ...]];
+       filtered by both D···A distance and ∠D–H···A angle.
+
+    After calling :meth:`make_pairs` (to enumerate candidate pairs) and
+    :meth:`pair_filter` (to apply geometry criteria), the per-frame dimer list
+    is stored in ``results.dimers`` as a list of dicts and optionally serialised
+    to a JSON file for use with :class:`DLDDF` or :func:`auto_cor`.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object to analyse.
+    at_g1 : list
+        First atom group.  For hydrogen-bond analysis pass a list of
+        ``[D_idx, [H1_idx, H2_idx, ...]]`` donor entries.  For simple distance
+        or CoM analysis pass a flat list of integer indices.
+    at_g2 : list of int
+        Indices of acceptor atoms or the second molecule group.
+    criteria : list of [distance_criterion, angle_criterion], optional
+        ``distance_criterion`` — one of:
+
+        * ``"1.05vdw_sum"`` / ``"1.1coval_sum"`` — scaled sum of van der
+          Waals / covalent radii (only valid when ``com=False``).
+        * A float giving the cutoff distance in Å.
+
+        ``angle_criterion`` — minimum ∠D–H···A in degrees (float), or a
+        flexible string like ``"120f"`` that scales the threshold with the
+        instantaneous D–H bond length.  Pass ``None`` if no angle filter is
+        required.  Default: ``[None, None]``.
+    com : bool, optional
+        If True, compute the inter-group distance as the distance between
+        centres of mass.  Default: False.
+
+    Results dataclass fields (populated after calling pair_filter())
+    ---------------------------------------------------------------
+    pairs  : ndarray — all candidate pairs enumerated by make_pairs().
+    dimers : list of dict — one entry per frame, each containing:
+             ``"frame"`` (int), ``"pairs"`` (list) and ``"dists"`` (list)
+             for distance-only mode; or ``"d_h_a_pairs"``, ``"d_a_dists"``,
+             and ``"d_h_a_angles"`` for H-bond mode.
+
+    Examples
+    --------
+    >>> # H-bond analysis: oxygen donors with their hydrogen atoms
+    >>> at_g1 = [[0, [1, 2]], [8, [9, 10]]]   # two water O–H donors
+    >>> at_g2 = [0, 8, 16]                     # acceptor oxygens
+    >>> hb = dimers(traj, at_g1, at_g2, criteria=["1.02vdw_sum", "120f"])
+    >>> hb.make_pairs()
+    >>> hb.pair_filter(mic=True, filename="hbonds.json")
     """
     def __init__(self, traj, at_g1, at_g2, criteria = [None, None], com = False):
         self.traj = traj.wrap2box()
@@ -61,8 +104,14 @@ class dimers(object):
         self.results = results
                   
     def make_pairs(self):
-        """
-        Make d_a_pairs and d_h_a_pairs from the donors and acceptors dict.
+        """Enumerate all candidate pairs from the two atom groups.
+
+        Generates the Cartesian product of ``at_g1`` × ``at_g2``, removes
+        self-pairs (where the same atom appears in both groups), and removes
+        duplicate reverse pairs (i, j) / (j, i) when the two groups overlap.
+        The result is stored in ``results.pairs`` as an integer ndarray of
+        shape (n_pairs, 2) for distance-only mode, or (n_pairs, 3) for
+        H-bond mode (columns: D, H, A).
         """
         # com = self.com
         # When calculates the distance of centre of masses of two molecules groups
@@ -109,10 +158,31 @@ class dimers(object):
                                 [self.results.pairs.append(x) for x in list(map(list, itertools.product([donor[0]], donor[1], [acceptor])))]
                     self.results.pairs = np.asarray(self.results.pairs)
         
-    def pair_filter(self, mic = True, filename = None):
-        """
-        Calculates the distance (and angle) and compares with the criteria to filter the pairs.
-        To save the filtered pairs, use save = True.
+    def pair_filter(self, mic=True, filename=None):
+        """Apply geometry criteria to identify dimers in each frame.
+
+        Iterates over all trajectory frames, computes the relevant geometry
+        observables (distance, and optionally D–H···A angle) for every
+        candidate pair, and retains only those that satisfy the criteria set
+        at construction time.
+
+        Parameters
+        ----------
+        mic : bool, optional
+            Apply the minimum image convention when computing distances and
+            angles.  Should be True for periodic systems.  Default: True.
+        filename : str, optional
+            If provided, serialise ``results.dimers`` to a JSON file with this
+            name.  The file can be passed directly to :func:`auto_cor` or
+            :class:`DLDDF`.
+
+        Notes
+        -----
+        For the flexible angle criterion (``"<angle>f"``), the threshold
+        ∠_min scales with the instantaneous D–H bond length as
+        ``angle_f × r(D–H) / (1.05 × (R_D + R_H))``, loosening the criterion
+        for elongated bonds to capture H-bond formation even during large
+        thermal fluctuations.
         """
         self.results.dimers = []
         # com = self.com
@@ -134,7 +204,7 @@ class dimers(object):
                 
         else:
             if isinstance(self.criteria.distance, str):
-                temp = re.compile("([\d\.\d]+)([a-zA-Z\_*]+)")
+                temp = re.compile(r"([\d\.]+)([a-zA-Z_*]+)")
                 res = temp.match(self.criteria.distance).groups()
                 if res[1] in ["vdw", "vdw_sum", "vdw_r"]:
                     self.criteria.distance = np.asarray([float(res[0]) * (data.vdW_R[self.traj.frames[0][pair[0].tolist()].symbs[0]] + data.vdW_R[self.traj.frames[0][pair[1].tolist()].symbs[0]]) for pair in self.results.pairs])
@@ -162,7 +232,7 @@ class dimers(object):
             else:
                 dt = np.dtype([('distance', np.float64), ('angle', np.float64)])
                 if isinstance(self.criteria.angle, str):
-                    temp = re.compile("([\d\.\d]+)([a-zA-Z]+)")
+                    temp = re.compile(r"([\d\.]+)([a-zA-Z]+)")
                     res = temp.match(self.criteria.angle).groups()
                     
                     for i, frame in enumerate(self.traj.frames):
@@ -214,29 +284,67 @@ class dimers(object):
 
 
 class DLDDF(object):
-    """Dimer Lifetime-Displacement Distribution Function
-    Takes the results.dimers of a dimers object and calculate the dimer lifetime-displacement distribution function
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    at_g1 : list of int, selected atoms to be calculated
-    at_g2 : list of int, selected atoms to be calculated
-    tau : the time interval
-    nbins : int (optional), number of bins (resolution) in the histogram
-    criteria : list of geometry criteria for the specified atoms to be regarded as pairs
-    com : wether to use the centre of mass of the atom groups in the distance calculation. Set com = True if the atoms groups are two lists of molecules.
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Returns a dataclass containing the analysis results
-    x :  np.array, radii over which g(r) is computed
-    rdf : 
-    plot : 
-    t : 
-    pairs : 
-    scaler : np.array distances
-    com_plot :
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Note:
-    Periodic boundary conditions not implemented in VHCF, due to the fact we cares the absolute displacement in this analysis.
+    """Dimer Lifetime–Displacement Distribution Function (DLDDF).
+
+    The DLDDF is a 2-D joint probability distribution that correlates the
+    *lifetime* τ of a dimer pair (the number of consecutive frames during which
+    the pair satisfies the geometry criteria) with the *centre-of-mass
+    displacement* Δr of that pair during the same interval:
+
+        DLDDF(τ, Δr) = P(lifetime = τ, displacement = Δr)
+
+    It is constructed by dividing the trajectory into non-overlapping windows
+    of *nframes* frames, locating all active dimer pairs in the first frame of
+    each window, tracking their survival until they break, and accumulating the
+    (lifetime, displacement) pair into a 2-D histogram.
+
+    The DLDDF reveals the coupling between structural relaxation (how long
+    dimers survive) and translational dynamics (how far the partners move while
+    associated).  Short-lived dimers with large displacements indicate a
+    diffusive mechanism, while long-lived pairs with small displacements
+    suggest a caged or localised regime.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object to analyse.  Coordinates are wrapped into the
+        simulation box on initialisation.
+    dimer_settings : dict, optional
+        Keyword arguments forwarded to the :class:`dimers` constructor
+        (``at_g1``, ``at_g2``, ``criteria``, ``com``).  Required when calling
+        :meth:`dimer_res`; not needed if ``results.dimers`` is set directly.
+    nbins : int, optional
+        Number of bins along each axis of the 2-D histogram. Default: 100.
+    range : ndarray, shape (2, 2), optional
+        ``[(τ_min, τ_max), (Δr_min, Δr_max)]`` — axis ranges in ps and Å.
+        Default: ``[(0.0, 2.0), (0.0, 5.0)]``.
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    dlddf     : ndarray, shape (nbins, nbins) — 2-D histogram (transposed for
+                correct contour-plot orientation: rows = Δr, cols = τ).
+    r_edges   : ndarray, shape (nbins+1,) — bin edges of the displacement axis.
+    tau_edges : ndarray, shape (nbins+1,) — bin edges of the lifetime axis.
+    r         : ndarray, shape (nbins,) — displacement bin centres in Å.
+    tau       : ndarray, shape (nbins,) — lifetime bin centres in ps.
+    dists     : list of float — all recorded displacements.
+    taus      : list of float — all recorded lifetimes.
+    dimers    : list of dict — per-frame dimer data (populated by dimer_res).
+    plot      : Figure or None — contourf figure if plot=True was requested.
+
+    Notes
+    -----
+    Periodic boundary conditions are applied via MIC when computing CoM
+    displacements (``mic=True``), ensuring that pairs that cross box boundaries
+    during their lifetime are handled correctly.
+
+    Examples
+    --------
+    >>> dimer_settings = dict(at_g1=g1, at_g2=g2, criteria=[3.5, None])
+    >>> dlddf = DLDDF(traj, dimer_settings=dimer_settings, nbins=100,
+    ...               range=np.array([(0.0, 1.0), (0.0, 4.0)]))
+    >>> dlddf.dimer_res(filename="dimers.json")   # resolve + cache to disk
+    >>> results = dlddf.calculate(nframes=200, plot=True)
     """
     def __init__(self, traj, dimer_settings = None, nbins = 100, range = np.array([(0.0, 2.0), (0.0, 5.0)])):
         self.traj = traj.wrap2box()
@@ -251,15 +359,89 @@ class DLDDF(object):
         self.results.dists = []
         self.results.taus = []
         
-    def dimer_res(self, mic = True, filename = None):
+    def dimer_res(self, mic=True, filename=None):
+        """Resolve dimers and store results for subsequent DLDDF calculation.
+
+        Constructs a :class:`dimers` instance from ``dimer_settings``, calls
+        :meth:`~dimers.make_pairs` and :meth:`~dimers.pair_filter`, then stores
+        the per-frame dimer list in ``results.dimers``.
+
+        Parameters
+        ----------
+        mic : bool, optional
+            Apply the minimum image convention during pair filtering.
+            Default: True.
+        filename : str, optional
+            If provided, the resolved dimer data are also written to a JSON
+            file under this name (useful for caching long calculations).
+        """
         dimers_data = dimers(self.traj, **self.dimer_settings)
         dimers_data.make_pairs()
         dimers_data.pair_filter(mic = mic, filename = filename)
         self.results.dimers = dimers_data.results.dimers
     
-    def calculate(self, nframes = 100, mic = True, plot = False, bins = 100, levels = 25, xlims = [0, 0.2], ylims = [0, 0.8], filename = None, **kwargs):
+    def calculate(self, nframes=100, mic=True, plot=False, bins=100, levels=25,
+                  xlims=[0, 0.2], ylims=[0, 0.8], filename=None, **kwargs):
+        """Compute the DLDDF 2-D histogram and optionally plot a contour map.
+
+        The trajectory is divided into non-overlapping windows of *nframes*
+        frames.  For each window the active dimer pairs in the first frame are
+        tracked forward until they break; the pair's (lifetime, CoM
+        displacement) is then accumulated into a 2-D histogram.
+
+        Parameters
+        ----------
+        nframes : int, optional
+            Number of consecutive frames per window. Smaller values sample
+            shorter lifetimes at higher statistics; larger values capture
+            longer-lived dimers but reduce the number of independent windows.
+            Default: 100.
+        mic : bool, optional
+            Apply the minimum image convention when computing CoM
+            displacements. Default: True.
+        plot : bool, optional
+            If True, produce a filled contour plot of the DLDDF.  Default: False.
+        bins : int, optional
+            Passed to :func:`numpy.histogram2d` (overrides ``nbins`` from
+            ``__init__`` if provided). Default: 100.
+        levels : int, optional
+            Number of contour levels in the plot. Default: 25.
+        xlims : list of float, optional
+            x-axis (lifetime) limits in ps for the plot. Default: [0, 0.2].
+        ylims : list of float, optional
+            y-axis (displacement) limits in Å for the plot. Default: [0, 0.8].
+        filename : str, optional
+            If provided, save the plot to this path at 600 dpi.
+        **kwargs
+            Additional keyword arguments forwarded to
+            :func:`matplotlib.axes.Axes.contourf`.
+
+        Returns
+        -------
+        results : dataclass
+            Populated results dataclass (see class docstring).
+
+        Notes
+        -----
+        The histogram bins are set by ``self.settings`` (``nbins`` and
+        ``range`` supplied at construction time), not by the ``bins``
+        parameter, which is currently unused.  Use ``range`` at construction
+        to control the axis extents.
+
+        Interpretation
+        --------------
+        - **Short τ, small Δr**: dimers that break quickly and barely move —
+          typical of thermal fluctuations at the boundary of the geometry
+          criterion (transient contacts).
+        - **Short τ, large Δr**: rapid breaking with significant displacement —
+          indicative of fast diffusive exchange typical in liquid-like regimes.
+        - **Long τ, small Δr**: long-lived, localised pairs — characteristic of
+          strongly bound dimers or caged dynamics (e.g. ion pairs in viscous
+          electrolytes or hydrogen-bonded networks).
+        - **Diagonal ridge**: a positive correlation between lifetime and
+          displacement suggests that pairs survive until they diffuse away,
+          consistent with a Brownian escape mechanism.
         """
-        Calculates the dlddf. Set skip = 1 whenever possible to ensure best accuracy."""
         # Use the dimers object to resolve dimers
         key = "pairs"
         if key not in list(self.results.dimers[0].keys()):
@@ -529,33 +711,144 @@ def res_h(d_a_pairs, d_h_a_pairs, traj):
 
 
 def bi_exp(t, amp1, tau1, tau2):
+    """Biexponential decay model C(t) = A·exp(−t/τ₁) + (1−A)·exp(−t/τ₂)."""
     return amp1*np.exp(-t/tau1) + (1-amp1)*np.exp(-t/tau2)
 
 
-def bi_exp_fit(x, y, amp1 = 0.5, tau1 = 100, tau2 = 150):
+def bi_exp_fit(x, y, amp1=0.5, tau1=100, tau2=150):
+    """Fit a biexponential decay to H-bond autocorrelation data.
+
+    The model is C(t) = A · exp(−t/τ₁) + (1−A) · exp(−t/τ₂), which captures
+    two distinct relaxation processes: a fast component associated with
+    librational motions and a slow component representing structural H-bond
+    breaking and reformation.
+
+    Parameters
+    ----------
+    x : ndarray
+        Time axis (ps).
+    y : ndarray
+        Autocorrelation values C(t), expected to decay from ~1 toward 0.
+    amp1 : float, optional
+        Initial guess for the fast-component amplitude A ∈ (0, 1). Default: 0.5.
+    tau1 : float, optional
+        Initial guess for the fast relaxation time τ₁ (same units as x).
+        Default: 100.
+    tau2 : float, optional
+        Initial guess for the slow relaxation time τ₂ (same units as x).
+        Default: 150.
+
+    Returns
+    -------
+    x_fit : ndarray
+        Dense time axis for plotting the fitted curve (200 points).
+    y_fit : ndarray
+        Fitted biexponential values at ``x_fit``.
+    params : ndarray
+        Optimised parameters (A, τ₁, τ₂).
+
+    Notes
+    -----
+    The effective (integrated) H-bond lifetime is
+
+        τ_eff = A · τ₁ + (1−A) · τ₂
+
+    Use :func:`calc_tau` for the exact value via numerical integration.
     """
-    Fit the data with biexponential function
-    """
-    params,_ = curve_fit(bi_exp, x, y, p0=[amp1, tau1, tau2])
-    x_fit = np.linspace(x.min(), x.max(), num = 200)
+    params, _ = curve_fit(bi_exp, x, y, p0=[amp1, tau1, tau2])
+    x_fit = np.linspace(x.min(), x.max(), num=200)
     y_fit = bi_exp(x_fit, *params)
-    print("The fitted biexponential function paramters are:\nA: {0}, tau1: {1}, tau2: {2}".format(*params))
+    print("The fitted biexponential function parameters are:\nA: {0:.4f}, tau1: {1:.4f}, tau2: {2:.4f}".format(*params))
     return x_fit, y_fit, params
 
+
 def calc_tau(amp1, tau1, tau2):
-    """
-    Calculates the H-bond lifetime by integrating the biexponential function.
+    """Compute the effective H-bond lifetime by integrating the biexponential.
+
+    The effective lifetime is the area under the normalised autocorrelation
+    function:
+
+        τ_eff = ∫₀^∞ [A · exp(−t/τ₁) + (1−A) · exp(−t/τ₂)] dt
+              = A · τ₁ + (1−A) · τ₂
+
+    Parameters
+    ----------
+    amp1 : float
+        Fast-component amplitude A from :func:`bi_exp_fit`.
+    tau1 : float
+        Fast relaxation time τ₁ (ps).
+    tau2 : float
+        Slow relaxation time τ₂ (ps).
+
+    Returns
+    -------
+    res : float
+        Effective H-bond lifetime τ_eff in the same units as τ₁ and τ₂.
+
+    Notes
+    -----
+    The analytical result A·τ₁ + (1−A)·τ₂ agrees with the numerical
+    integration to machine precision.  The numerical route is retained here
+    for consistency with non-standard functional forms.
     """
     def function(x):
         return amp1*np.exp(-x/tau1) + (1 - amp1)*np.exp(-x/tau2)
 
     res, err = quad(function, 0, np.inf)
-    print(f"The H-bond lifetime is {res} ps.")
+    print(f"The H-bond lifetime is {res:.4f} ps.")
     return res
 
-def auto_cor(data = "hbonds.json", nframes = 1000, skip = 100, index = ":", timestep = None):
-    """
-    Calculates the autocorrelation function of H-bonds from a trajectory.
+
+def auto_cor(data="hbonds.json", nframes=1000, skip=100, index=":", timestep=None):
+    """Compute the H-bond survival autocorrelation function C(t) from a JSON file.
+
+    Reads the per-frame H-bond list produced by :meth:`dimers.pair_filter` (or
+    :func:`res_h`) from a JSON file and evaluates the continuous (non-
+    intermittent) autocorrelation function
+
+        C(t) = ⟨h(0) · h(t)⟩ / ⟨h(0)²⟩
+
+    where h(t) = 1 if a bond that existed at t = 0 is still intact at time t
+    and 0 otherwise.  The trajectory is divided into non-overlapping windows of
+    *nframes* frames; C(t) is averaged over all windows to improve statistics.
+
+    Parameters
+    ----------
+    data : str, optional
+        Path to the JSON file containing the H-bond list. Default: "hbonds.json".
+    nframes : int, optional
+        Number of frames per analysis window. Default: 1000.
+    skip : int, optional
+        Stride for sampling within each window: only every *skip*-th frame is
+        used. Default: 100.
+    index : str or int or list of int, optional
+        Frame selection from the JSON file:
+        ``":"`` — all frames; ``int n`` — first n frames;
+        ``[start, stop]`` — slice. Default: ``":"``.
+    timestep : float, optional
+        Trajectory time step in fs.  Used to build the time axis in ps.
+        Default: 5 fs.
+
+    Returns
+    -------
+    t : ndarray
+        Time axis in ps for the sampled points (length = nframes // skip).
+    C_ts_mean : ndarray
+        Mean C(t) averaged over all trajectory windows.
+    C_ts_error : ndarray
+        Standard error of C(t) across windows.
+
+    Notes
+    -----
+    C(t) decays from 1 at t = 0 toward 0 as H-bonds break.  Fitting the
+    result with :func:`bi_exp_fit` and integrating with :func:`calc_tau`
+    yields the effective H-bond lifetime τ_eff.
+
+    The *continuous* (non-intermittent) definition used here counts a bond as
+    broken permanently as soon as it fails the geometry criterion for the first
+    time, even if it later reforms.  This gives the *structural relaxation*
+    lifetime rather than the longer *reactive* lifetime that allows
+    intermittent breaking.
     """
     # Opening JSON data file containing the hbonds information
     f = open(data)
