@@ -1,7 +1,7 @@
 import numpy as np
 import itertools
 from recordclass import make_dataclass, dataobject
-from typing import List, Tuple, Union, Optional, Any, Sequence
+from typing import Dict, List, Tuple, Union, Optional, Any, Sequence
 from fishmol.data import elements
 from fishmol.utils import make_comb, cart2xys, xys2cart, translate_pretty
 
@@ -402,6 +402,72 @@ class Atoms(np.ndarray):
             pairs = np.array(pairs)[mask]
         return pairs, distances
     
+    def get_neighbours(
+        self,
+        idx: Union[int, List[int]],
+        cutoff: float,
+        symbols: Optional[Union[str, List[str]]] = None,
+        mic: bool = True,
+    ) -> Dict[int, List[dict]]:
+        """
+        Find all atoms within `cutoff` Å of each centre atom, respecting MIC.
+
+        Parameters
+        ----------
+        idx : int or list of int
+            Index (or indices) of the centre atom(s).
+        cutoff : float
+            Distance threshold in Å.
+        symbols : str or list of str, optional
+            Restrict neighbours to these element types only.
+        mic : bool, default True
+            Apply minimum image convention (required for PBC systems).
+
+        Returns
+        -------
+        dict mapping centre index → list of neighbour dicts::
+
+            {centre: [{"idx": int, "symbol": str, "dist": float}, ...], ...}
+
+        Example
+        -------
+        >>> nb = frame.get_neighbours(0, cutoff=3.5, symbols="O")
+        >>> nb[0]
+        [{"idx": 12, "symbol": "O", "dist": 2.84}, ...]
+        """
+        centres = [idx] if isinstance(idx, int) else list(idx)
+        if symbols is not None:
+            symbol_filter = {symbols} if isinstance(symbols, str) else set(symbols)
+        else:
+            symbol_filter = None
+
+        n = len(self.symbs)
+        all_idx = np.arange(n)
+
+        sym_mask = (
+            np.array([s in symbol_filter for s in self.symbs])
+            if symbol_filter is not None
+            else np.ones(n, dtype=bool)
+        )
+
+        result = {}
+        for centre in centres:
+            diffs = self.pos - self.pos[centre]        # (N, 3)
+            if mic:
+                diffs = cart2xys(diffs, self.cell)
+                diffs -= np.round(diffs)               # wrap to [-0.5, 0.5)
+                diffs = xys2cart(diffs, self.cell)
+            dists = np.linalg.norm(diffs, axis=1)      # (N,)
+
+            mask = (dists < cutoff) & sym_mask
+            mask[centre] = False                       # exclude self
+
+            result[centre] = [
+                {"idx": int(j), "symbol": str(self.symbs[j]), "dist": float(dists[j])}
+                for j in all_idx[mask]
+            ]
+        return result
+
     def angle(self, a: int, b: int, c: int, mic: bool = False) -> float:
         """
         Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.

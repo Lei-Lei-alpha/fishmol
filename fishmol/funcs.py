@@ -1,4 +1,9 @@
-"""A range of functions to analyse the trajectory object"""
+"""Analysis functions for MD trajectories.
+
+Provides distribution functions (RDF, ADF, DDF, CDF), vector reorientation
+dynamics (VRD), and the Van Hove correlation function (VHCF) for post-processing
+Trajectory objects produced by fishmol.trj.
+"""
 
 import numpy as np
 import itertools
@@ -7,34 +12,50 @@ from typing import List, Tuple, Union, Optional, Any, Sequence
 from recordclass import make_dataclass, asdict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from fishmol.utils import to_sublists, make_comb, update_progress
+from fishmol.utils import to_sublists, make_comb, update_progress, cart2xys, xys2cart
 from fishmol import style
 from scipy.optimize import curve_fit
 
 
 # RDF
 class RDF(object):
-    """
-    Pair distribution function:
-    Calculated by histogramming distances between all particles in `g1` and `g2` while taking
-    periodic boundary conditions into account via the minimum image
-    convention.
+    """Radial distribution function g(r) between two atom groups.
 
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    at_g1 : list of int, selected atoms to be calculated
-    at_g2 : list of int, selected atoms to be calculated
-    nbins : int (optional), number of bins (resolution) in the histogram
-    range : tuple or list (optional), the size of the RDF
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Returns a dataclass containing the analysis results
-    x :  np.array, radii over which g(r) is computed
-    rdf : 
-    plot : 
-    t : 
-    pairs : 
-    scaler : np.array distances
-    com_plot : 
+    The RDF describes how atomic density varies as a function of distance from a
+    reference atom. It is normalised to unity at large r in a homogeneous bulk liquid:
+
+        g(r) = count(r) / [ nA * nB * (4π r² Δr / V) * nframes ]
+
+    where nA and nB are the sizes of the two atom groups, V is the simulation box
+    volume, Δr is the bin width, and nframes is the total number of trajectory frames.
+    Pairwise distances are computed under the minimum image convention (MIC) so that
+    periodic boundary conditions are correctly handled.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object to analyse.
+    at_g1 : list of int
+        Atom indices forming the first selection (reference group).
+    at_g2 : list of int
+        Atom indices forming the second selection (neighbour group).
+    nbins : int, optional
+        Number of histogram bins (controls radial resolution). Default: 200.
+    range : tuple of float, optional
+        (r_min, r_max) in Å over which g(r) is computed. Default: (0.0, 15.0).
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    x        : ndarray, shape (nbins,) — bin centre radii in Å.
+    rdf      : ndarray, shape (nbins,) — g(r) values.
+    edges    : ndarray, shape (nbins+1,) — bin edge positions in Å.
+    count    : ndarray, shape (nbins,) — raw pair count histogram.
+    pairs    : list of (int, int) — all (g1, g2) index pairs included.
+    scaler   : ndarray, shape (nframes, npairs) — per-frame pair distances in Å;
+               used by com_plot to show the time evolution of individual pairs.
+    t        : ndarray, shape (nframes,) — time axis in ps.
+    plot     : Figure — g(r) line plot (set when plot=True).
+    com_plot : Figure — combined time-series + g(r) panel (set when com_plot=True).
     """
     def __init__(self, traj: Any, at_g1: Union[List[int], Any], at_g2: Union[List[int], Any], nbins: int = 200, range: Tuple[float, float] = (0.0, 15.0)) -> None:
         self.g1 = at_g1
@@ -47,13 +68,27 @@ class RDF(object):
         self.results.count, self.results.edges = np.histogram([-1], **asdict(self.settings))
         self.results.x = (self.results.edges[:-1] + self.results.edges[1:])/2
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
-        # Need to know average volume
-        self.volume = np.zeros(self.settings.bins) + np.asarray(self.traj.cell[0]).dot(np.cross(np.asarray(self.traj.cell[1]), np.asarray(self.traj.cell[2])))
+        cell = np.asarray(self.traj.cell)
+        self.volume = float(cell[0].dot(np.cross(cell[1], cell[2])))
         
     def calculate(self, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
-        """
-        Calculate the RDF of two atom groups by calling this function.
-         
+        """Compute g(r) and optionally plot the result.
+
+        Parameters
+        ----------
+        plot : bool, optional
+            If True, display a g(r) vs r line plot. Default: False.
+        com_plot : bool, optional
+            If True, display a combined panel showing the time evolution of each
+            pair distance alongside the g(r) curve. Default: False.
+        **kwargs
+            Additional keyword arguments forwarded to matplotlib plot calls
+            (e.g. color, linewidth, label).
+
+        Returns
+        -------
+        results : dataclass
+            Populated results object; see class docstring for field descriptions.
         """
         dists = np.asarray([self.traj.frames[i].dists(self.g1, self.g2, cutoff = self.settings.range[1], mic = True)[1] for i in range(self.traj.nframes)])
         count = np.histogram(dists, **asdict(self.settings))[0]
@@ -105,25 +140,47 @@ class RDF(object):
 
 # ADF
 class ADF(object):
-    """Angular distribution function
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    at_g1 : AtomGroup
-      First AtomGroup
-    at_g2 : AtomGroup
-      Second AtomGroup
-    nbins : int (optional)
-          Number of bins in the histogram
-    range : tuple or list (optional)
-          The size of the RDF
-    verbose : bool (optional)
-          Show detailed progress of the calculation if set to ``True``
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Returns
-    g_r : (n_radii) np.array
-        radial distribution function values g(r).
-    radii : (n_radii) np.array
-        radii over which g(r) is computed
+    """Angular distribution function g(α) for three-body angles.
+
+    The ADF describes the probability distribution of the bond angle α formed by
+    the triplet g1–g2–g3, where g2 is the central atom group. All angles are
+    computed under the minimum image convention.
+
+    When cone_correction=True (default), the raw histogram is divided by sin(α)
+    to account for the increasing area of the solid-angle shell at angle α:
+
+        g(α) = count(α) / [ nA * nB * nC * nframes * sin(α) ]
+
+    Without the correction, the distribution is biased toward larger angles simply
+    because there is more solid-angle available. The corrected g(α) integrates to a
+    constant, allowing direct comparison between different systems.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object to analyse.
+    at_g1 : list of int
+        Atom indices of the first terminal group (one end of the angle).
+    at_g2 : list of int
+        Atom indices of the central group (vertex of the angle).
+    at_g3 : list of int
+        Atom indices of the second terminal group (other end of the angle).
+    nbins : int, optional
+        Number of histogram bins. Default: 200.
+    range : tuple of float, optional
+        (α_min, α_max) in degrees. Default: (0.0, 180.0).
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    x        : ndarray, shape (nbins,) — bin centre angles in degrees.
+    adf      : ndarray, shape (nbins,) — g(α) values.
+    edges    : ndarray, shape (nbins+1,) — bin edge angles in degrees.
+    count    : ndarray, shape (nbins,) — accumulated raw angle histogram.
+    pairs    : array — atom index triplets included in the calculation.
+    scaler   : ndarray, shape (nframes, npairs) — per-frame angle values in degrees.
+    t        : ndarray, shape (nframes,) — time axis in ps.
+    plot     : Figure — g(α) line plot (set when plot=True).
+    com_plot : Figure — combined time-series + g(α) panel (set when com_plot=True).
     """
     def __init__(self, traj: Any, at_g1: Any, at_g2: Any, at_g3: Any, nbins: int = 200, range: Tuple[float, float] = (0.0, 180.0)) -> None:
         self.g1 = at_g1
@@ -132,17 +189,36 @@ class ADF(object):
         self.traj = traj
         settings = make_dataclass("Settings", "bins range")
         self.settings = settings(nbins, range)
-        count, edges = np.histogram([-1], **asdict(self.settings))
-        count = count.astype(np.float64)
-        count *= 0.0
+        _, edges = np.histogram([-1], **asdict(self.settings))
         results = make_dataclass("Results", "edges count x adf plot t pairs scaler com_plot")
         self.results = results
         self.results.edges = edges
-        self.results.x = (edges[:-1] + edges[1:])/2
-        self.results.count = count
+        self.results.x = (edges[:-1] + edges[1:]) / 2
+        self.results.count = np.zeros(self.settings.bins)
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         
     def calculate(self, cone_correction: bool = True, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
+        """Compute g(α) and optionally plot the result.
+
+        Parameters
+        ----------
+        cone_correction : bool, optional
+            Divide the raw histogram by sin(α) to correct for solid-angle geometry.
+            Should be True (default) for physically meaningful angular distributions.
+            Set to False only if you need the raw, uncorrected histogram shape.
+        plot : bool, optional
+            If True, display a g(α) vs α line plot. Default: False.
+        com_plot : bool, optional
+            If True, display a combined panel showing the angle time series alongside
+            the g(α) curve. Default: False.
+        **kwargs
+            Additional keyword arguments forwarded to matplotlib plot calls.
+
+        Returns
+        -------
+        results : dataclass
+            Populated results object; see class docstring for field descriptions.
+        """
         angles = []
         for frame in self.traj:
             pairs, angle = frame.angles(self.g1, self.g2, self.g3, mic = True)
@@ -159,9 +235,12 @@ class ADF(object):
         
         # Calculate ADF
         if cone_correction:
-            self.results.adf = np.asarray(self.results.count / (NA * NB * NC * self.traj.nframes * np.sin(self.results.x * np.pi / 180))) # cone correction, convert degree to radians
+            # Divide by sin(θ) to correct for the solid-angle shell (2π sinθ dθ).
+            # np.maximum guards against near-zero values at θ ≈ 0° and θ ≈ 180°.
+            sin_theta = np.maximum(np.sin(self.results.x * np.pi / 180), 1e-10)
+            self.results.adf = self.results.count / (NA * NB * NC * self.traj.nframes * sin_theta)
         else:
-            self.results.adf = np.asarray(self.results.count / (NA * NB * NC * self.traj.nframes))
+            self.results.adf = self.results.count / (NA * NB * NC * self.traj.nframes)
         
         if plot:
             fig, ax = plt.subplots(figsize = (4.2, 3.6))
@@ -191,40 +270,77 @@ class ADF(object):
 
 # DDF
 class DDF(object):
-    """Dihedral distribution function
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    at_g1 : AtomGroup
-      First AtomGroup
-    at_g2 : AtomGroup
-      Second AtomGroup
-    nbins : int (optional)
-          Number of bins in the histogram
-    range : tuple or list (optional)
-          The size of the RDF
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Returns
-    g_r : (n_radii) np.array
-        radial distribution function values g(r).
-    radii : (n_radii) np.array
-        radii over which g(r) is computed
+    """Dihedral distribution function g(δ) for torsion angles.
+
+    The DDF describes the probability distribution of the torsion angle δ defined
+    by four consecutive bonded atoms A–B–C–D. The torsion angle is the angle
+    between the plane containing A–B–C and the plane containing B–C–D, measured
+    about the central B–C bond axis.
+
+    Unlike the ADF, no sin(δ) correction is applied: dihedral angles are azimuthal
+    quantities (uniform geometric probability) and their distribution is directly
+    proportional to the raw histogram counts.
+
+        g(δ) = count(δ) / [ N_dihedrals * nframes ]
+
+    where N_dihedrals is the number of unique four-atom torsion combinations and
+    nframes is the total number of trajectory frames. All dihedral angles are
+    computed under the minimum image convention.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object to analyse.
+    at_g : list of list of int
+        Atom index groups defining the four-body torsion combinations. The groups
+        are passed directly to ``Atoms.dihedrals()``.
+    nbins : int, optional
+        Number of histogram bins. Default: 200.
+    range : tuple of float, optional
+        (δ_min, δ_max) in degrees. Default: (0.0, 180.0).
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    x        : ndarray, shape (nbins,) — bin centre angles in degrees.
+    ddf      : ndarray, shape (nbins,) — g(δ) values.
+    edges    : ndarray, shape (nbins+1,) — bin edge angles in degrees.
+    count    : ndarray, shape (nbins,) — accumulated raw torsion histogram.
+    angles   : ndarray, shape (nframes, ndihedrals) — per-frame torsion values in degrees.
+    t        : ndarray, shape (nframes,) — time axis in ps.
+    plot     : Figure — g(δ) line plot (set when plot=True).
+    com_plot : Figure — combined time-series + g(δ) panel (set when com_plot=True).
     """
     def __init__(self, traj: Any, at_g: Any, nbins: int = 200, range: Tuple[float, float] = (0.0, 180.0)) -> None:
         self.g = at_g
         self.traj = traj
         settings = make_dataclass("Settings", "bins range")
         self.settings = settings(nbins, range)
-        count, edges = np.histogram([-1], **asdict(self.settings))
-        count = count.astype(np.float64)
-        count *= 0.0
+        _, edges = np.histogram([-1], **asdict(self.settings))
         results = make_dataclass("Results", "edges count x ddf plot t angles com_plot")
         self.results = results
         self.results.edges = edges
-        self.results.x = (edges[:-1] + edges[1:])/2
-        self.results.count = count
+        self.results.x = (edges[:-1] + edges[1:]) / 2
+        self.results.count = np.zeros(self.settings.bins)
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         
     def calculate(self, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
+        """Compute g(δ) and optionally plot the result.
+
+        Parameters
+        ----------
+        plot : bool, optional
+            If True, display a g(δ) vs δ line plot. Default: False.
+        com_plot : bool, optional
+            If True, display a combined panel showing the torsion angle time series
+            alongside the g(δ) curve. Default: False.
+        **kwargs
+            Additional keyword arguments forwarded to matplotlib plot calls.
+
+        Returns
+        -------
+        results : dataclass
+            Populated results object; see class docstring for field descriptions.
+        """
         angles = []
         for frame in self.traj:
             pairs, angle = frame.dihedrals(self.g, mic = True)
@@ -267,25 +383,44 @@ class DDF(object):
 
 # CDF
 class CDF(object):
-    """Combined distribution function
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    at_g1 : AtomGroup
-      First AtomGroup
-    at_g2 : AtomGroup
-      Second AtomGroup
-    nbins : int (optional)
-          Number of bins in the histogram
-    range : tuple or list (optional)
-          The size of the RDF
-    verbose : bool (optional)
-          Show detailed progress of the calculation if set to ``True``
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Returns
-    g_r : (n_radii) np.array
-        radial distribution function values g(r).
-    radii : (n_radii) np.array
-        radii over which g(r) is computed
+    """Combined (joint) distribution function correlating two scalar observables.
+
+    The CDF is a 2D histogram that reveals the joint probability of two structural
+    quantities occurring simultaneously across all trajectory frames. A typical use
+    case is correlating a pair distance (from an RDF) with a bond angle (from an ADF)
+    to expose structural correlations that are invisible in the individual 1D
+    distributions. For example, a CDF of O···O distance vs O–H···O angle can pinpoint
+    the geometry of hydrogen-bonded configurations.
+
+    The CDF takes two already-computed Results objects (e.g., from RDF and ADF) and
+    their flat per-frame observable arrays (stored in ``results.scaler``) as input.
+    The 2D histogram bins are taken directly from the edges of those Results objects,
+    so the spatial and angular axes are automatically consistent with the prior 1D
+    analysis.
+
+    Parameters
+    ----------
+    scaler1 : Results dataclass
+        Results object from a prior RDF, ADF, or DDF calculation. Must contain
+        ``edges`` and ``scaler`` attributes, plus the attribute named by ``names[0]``
+        (e.g., ``rdf`` or ``adf``) for the marginal plot.
+    scaler2 : Results dataclass
+        Results object for the second observable, with the same requirements.
+    names : list of str, optional
+        Two-element list giving the attribute names of the 1D distributions to plot
+        in the marginal panels (e.g., ``["rdf", "adf"]``). Required when using the
+        default range or when plot=True.
+    range : tuple of [float, float], optional
+        ``([x_min, x_max], [y_min, y_max])`` defining the extent of the 2D histogram.
+        Defaults to ``([0, scaler1.max], [0, scaler2.max])``.
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    cdf     : ndarray, shape (nbins_y, nbins_x) — 2D joint histogram counts (transposed
+              so the first axis corresponds to the y-axis observable).
+    xedges  : ndarray — bin edges for the x-axis observable (from scaler1).
+    yedges  : ndarray — bin edges for the y-axis observable (from scaler2).
+    plot    : Figure — 2D contour plot with marginal 1D panels (set when plot=True).
     """
     def __init__(self, scaler1: Any, scaler2: Any, names: Optional[List[str]] = None, range: Optional[Tuple[List[float], List[float]]]  = None) -> None:
         self.s1 = scaler1
@@ -299,6 +434,22 @@ class CDF(object):
         self.results = results
         
     def calculate(self, plot: bool = True, **kwargs: Any) -> Any:
+        """Compute the 2D joint histogram and optionally plot the result.
+
+        Parameters
+        ----------
+        plot : bool, optional
+            If True (default), display a filled contour plot with the 1D marginal
+            distributions of each observable in side panels.
+        **kwargs
+            Additional keyword arguments forwarded to ``np.histogram2d``
+            (e.g. normed, weights).
+
+        Returns
+        -------
+        results : dataclass
+            Populated results object; see class docstring for field descriptions.
+        """
         self.results.xedges = self.s1.edges
         self.results.yedges = self.s2.edges
 
@@ -343,20 +494,72 @@ class CDF(object):
 
 # VRD
 class VRD(object):
-    """Vector Reorientation Dynamics
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Arguments
-    spec : np.array or list of two atoms (two atom groups) that determine the vector
-    timestep : the timestep of the vector when using np.array input
-    traj : the input Trajectory object
-    num : int, length of frames to calculate the reorientation dynamics
-    skip : int, frames to skip = skip - 1. Determines the sampling step of the Trajectory, eg. skip = 1, use all frames in the Trajectory: skip = 10, skip 9 frames.
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Returns
-    self.results:
-    - t: time calculated
-    - C_t: the average c_t
-    - C_t_error: the error of c_t
+    """Vector Reorientation Dynamics via Legendre polynomial autocorrelation.
+
+    The VRD quantifies how quickly a molecular vector (e.g. an O–H bond, a C–C
+    axis) loses memory of its initial orientation. It computes the time
+    autocorrelation function of the l-th order Legendre polynomial:
+
+        C_l(t) = < P_l( u(0) · u(t) ) >
+
+    where u(t) is the unit vector at time t and the angle brackets denote an
+    ensemble average over all vectors and all time origins. The three polynomials
+    available are:
+
+        P_1(x) = x                         (l=1, related to IR absorption)
+        P_2(x) = (3x² − 1) / 2            (l=2, related to NMR T₁ and Raman)
+        P_3(x) = (5x³ − 3x) / 2           (l=3, related to higher-order spectra)
+
+    C_l(t) decays from 1 at t=0 toward 0 as the vector randomises. The decay is
+    fitted with the Kohlrausch–Williams–Watts (KWW) stretched exponential:
+
+        C(t) = exp( −(t / τ)^β )
+
+    where τ is the relaxation time (ps) and β ∈ (0, 1] is the stretching exponent
+    (β=1 reduces to a single exponential; β<1 indicates heterogeneous dynamics).
+
+    The trajectory is divided into non-overlapping chunks of ``num`` frames. Within
+    each chunk, the autocorrelation is computed using the first frame as the time
+    origin, then the results are averaged over all chunks. Reducing ``skip`` uses
+    more chunks and reduces statistical error at the cost of correlation between
+    samples.
+
+    Parameters
+    ----------
+    traj : Trajectory, optional
+        Trajectory object to analyse. Provide either ``traj`` + ``spec`` or
+        a pre-computed ``spec`` array.
+    spec : list of [list of int, list of int] or ndarray
+        When ``traj`` is given: a two-element list ``[g1_indices, g2_indices]``
+        defining the atom pairs whose inter-atomic vector is tracked.
+        When ``traj`` is None: a 2D ndarray of shape (nframes, 3) containing
+        the pre-computed vector time series.
+    timestep : float, optional
+        Trajectory timestep in fs. Required when ``traj`` is None; ignored
+        otherwise (taken from ``traj.timestep``).
+    num : int, optional
+        Number of frames per analysis chunk. Determines the maximum lag time:
+        t_max = timestep * (num − 1) / 1000 ps. Default: 2000.
+    sampling : int, optional
+        Frame stride within each chunk. A value of 5 uses every 5th frame,
+        reducing memory use and computation while coarsening time resolution.
+        Default: 5.
+    skip : int, optional
+        Chunk stride: only every ``skip``-th chunk is used. Increasing ``skip``
+        reduces correlations between chunks at the cost of statistical precision.
+        Default: 10.
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    t          : ndarray, shape (num//sampling,) — lag time axis in ps.
+    C_t        : ndarray — ensemble-averaged C_l(t) values.
+    C_t_error  : ndarray — standard error of the mean across chunks.
+    t_fit      : ndarray, shape (200,) — dense time axis for the fitted curve
+                 (set when fit=True).
+    C_t_fit    : ndarray — KWW fitted values on t_fit (set when fit=True).
+    fit_params : ndarray — fitted [τ, β] parameters (set when fit=True).
+    plot       : Figure — C_l(t) scatter plot, optionally with the KWW fit curve
+                 (set when plot=True).
     """
     def __init__(self, traj: Any = None, spec: Any = None, timestep: Optional[float] = None, num: int = 2000, sampling: int = 5, skip: int = 10) -> None:
         results = make_dataclass("Results", "t C_t C_t_error t_fit C_t_fit fit_params plot")
@@ -383,6 +586,35 @@ class VRD(object):
         self.results.t = np.linspace(0, self.t_step * (self.num - 1) / 1000, num = self.num//self.sampling)
     
     def calculate(self, l: int = 3, mean: bool = True, fit: bool = False, plot: bool = True, log_scale: bool = False, **kwargs: Any) -> Any:
+        """Compute C_l(t) and optionally fit and plot the result.
+
+        Parameters
+        ----------
+        l : int, optional
+            Order of the Legendre polynomial (1, 2, or 3). Default: 3.
+            l=2 is the most commonly reported value (NMR, Raman);
+            l=1 gives the slowest-decaying autocorrelation.
+        mean : bool, optional
+            If True (default), average C_l(t) over all chunks and vector pairs,
+            producing a single decay curve with an error estimate.
+            If False, return one curve per chunk.
+        fit : bool, optional
+            If True, fit C_l(t) with the KWW stretched exponential and store the
+            fitted curve and parameters in the results. Default: False.
+        plot : bool, optional
+            If True (default), display C_l(t) as a scatter plot, with the KWW fit
+            overlaid if fit=True.
+        log_scale : bool, optional
+            If True, display the y-axis on a logarithmic scale. Useful for
+            identifying multi-exponential or power-law decay behaviour. Default: False.
+        **kwargs
+            Additional keyword arguments forwarded to ``ax.scatter`` (e.g. color, s).
+
+        Returns
+        -------
+        results : dataclass
+            Populated results object; see class docstring for field descriptions.
+        """
         if self.traj is not None:
             if any([self.spec[0] is None, self.spec[1] is None]):
                 raise ValueError("Please specify atom groups ")
@@ -395,8 +627,13 @@ class VRD(object):
             
             for i, frame_chunk in enumerate(frame_chunks):
                 select = frame_chunk[::self.sampling]
-                dot_products[i,:] = np.asarray([np.diagonal(frame.vecs(combs = combs, absolute = False, normalise = True, mic = True).dot(
-                    select[0].vecs(combs = combs, absolute = False, normalise = True, mic = True).T)) for frame in select])
+                # Compute reference vectors once; reuse for all frames in this chunk.
+                # (A * B).sum(axis=1) is O(N) vs np.diagonal(A @ B.T) which is O(N²).
+                vecs_0 = select[0].vecs(combs=combs, absolute=False, normalise=True, mic=True)
+                dot_products[i, :] = np.stack([
+                    (frame.vecs(combs=combs, absolute=False, normalise=True, mic=True) * vecs_0).sum(axis=1)
+                    for frame in select
+                ])
                 update_progress(i / len(frame_chunks))
             
         # If the vec is an array of vectors without traj
@@ -443,16 +680,14 @@ class VRD(object):
             raise ValueError("l = 1, 2 or 3")
 
         def kww_func_fit(x, y, tau = 1, beta = 0.4, maxfev = 10000):
-            """
-            Fit the data with Kohlrausch-Willliams-Watts equation
-            """
+            """Fit C_l(t) with the KWW stretched exponential exp(−(t/τ)^β)."""
             def kww_func(t, tau, beta):
                 return np.exp(-(t/tau)**beta)
 
             params,_ = curve_fit(kww_func, x, y, p0=[tau, beta], maxfev = maxfev)
             x_fit = np.linspace(x.min(), x.max(), num = 200)
             y_fit = kww_func(x_fit, *params)
-            print("The fitted KWW function paramters are:\nalpha: {0}, beta: {1}".format(*params))
+            print("The fitted KWW function parameters are:\ntau: {0:.4f} ps, beta: {1:.4f}".format(*params))
             return x_fit, y_fit, params
         
         if fit:
@@ -505,18 +740,81 @@ class VRD(object):
 
 
 class VHCF(object):
-    """
-    Van Hove Correlation Function & Non-Gaussian Parameter Analysis
-    ----------------------------------------------------------------------
-    Arguments:
-        traj      : Trajectory object containing .frames, .timestep, .nframes, .cell
-        at_g1     : list of int, selected atom indices (Group 1)
-        at_g2     : list of int, selected atom indices (Group 2, optional). 
-                    If None, calculates the Self-Van Hove Function G_s(r,t) and alpha_2.
-        r_bins    : int, number of bins for spatial resolution
-        r_range   : list of float, [min_distance, max_distance]
-        tau_sep   : int/float, time interval step size (in fs)
-        tau_range : list of float, [min_time, max_time] for correlation (in ps)
+    """Van Hove correlation function G(r, τ) and non-Gaussian parameter analysis.
+
+    The Van Hove correlation function characterises both the spatial structure and
+    the temporal dynamics of a system. Two complementary modes are available:
+
+    **Self-part G_s(r, τ)** (``at_g2=None``):
+        Tracks the same set of atoms over time. G_s(r, τ) is the probability that
+        a tagged atom has displaced by a distance r in time τ. For purely Fickian
+        diffusion in three dimensions, G_s is a Gaussian. Deviations indicate
+        dynamical heterogeneity such as cage trapping, hopping, or glassy dynamics.
+
+        .. warning::
+            The self-part requires **unwrapped** (non-wrapped) coordinates. Do not
+            call ``traj.wrap2box()`` before this analysis; use ``traj.calib()`` only.
+            Wrapped coordinates cause atoms crossing box boundaries to appear to jump
+            by ~L instead of a small thermal displacement, corrupting the MSD and
+            the non-Gaussian parameter α₂.
+
+    **Distinct-part G_d(r, τ)** (``at_g2`` provided):
+        Tracks two different atom groups. G_d(r, τ) is the probability of finding an
+        atom from g2 at distance r from an atom in g1 at time τ later. At τ = 0 it
+        reduces to the radial distribution function g(r). Pair distances are computed
+        under the minimum image convention. As τ → ∞ the correlations decay and
+        G_d → 1.
+
+    Additional observables computed alongside G(r, τ):
+
+    - **Radial probability distribution** RPD(r, τ) = 4π r² G(r, τ): integrates to 1
+      for the self-part and reveals the most probable displacement distance.
+    - **Non-Gaussian parameter** α₂(τ) = 3⟨r⁴⟩ / (5⟨r²⟩²) − 1 (self-part only):
+      zero for Gaussian diffusion; positive values signal heterogeneous dynamics.
+      The time τ* at which α₂ peaks marks the characteristic cage-escape time.
+    - **Mean squared displacement** ⟨Δr²⟩(τ) (self-part only): equivalent to the
+      MSD computed from ``fishmol.msd``, shown on a log–log scale to identify
+      ballistic (slope 2), caged (slope ≈ 0), and diffusive (slope 1) regimes.
+    - **Intermediate scattering function** F(k, τ): the spatial Fourier transform
+      of G(r, τ), directly related to neutron or X-ray scattering experiments.
+
+    Parameters
+    ----------
+    traj : Trajectory
+        Trajectory object to analyse.
+    at_g1 : list of int
+        Atom indices of the first group (the reference / tagged atoms).
+    at_g2 : list of int or None, optional
+        Atom indices of the second group. If None (default), the self-part G_s is
+        computed by tracking the atoms in at_g1 over time.
+    r_bins : int, optional
+        Number of radial histogram bins. Default: 100.
+    r_range : list of float, optional
+        [r_min, r_max] in Å for the spatial histogram. Default: [0.0, 5.0].
+    tau_sep : float or None, optional
+        Time separation between successive τ values, in fs. If None (default),
+        the trajectory timestep is used. Values smaller than the timestep are
+        silently clipped to the timestep.
+    tau_range : list of float, optional
+        [τ_min, τ_max] in ps for the correlation time axis. If the requested
+        maximum exceeds the trajectory length, it is capped automatically with
+        a warning. Default: [0.0, 5.0].
+
+    Results dataclass fields (populated after calling calculate())
+    -------------------------------------------------------------
+    r       : ndarray, shape (r_bins,) — radial bin centres in Å.
+    r_edges : ndarray, shape (r_bins+1,) — radial bin edges in Å.
+    tau     : ndarray — time axis in ps.
+    g_rt    : ndarray, shape (n_tau, r_bins) — G(r, τ) values.
+    rpd     : ndarray, shape (n_tau, r_bins) — radial probability distribution
+              4π r² G(r, τ).
+    alpha2  : ndarray, shape (n_tau,) — non-Gaussian parameter α₂(τ)
+              (self-part only; zero otherwise).
+    msd     : ndarray, shape (n_tau,) — mean squared displacement in Å²
+              (self-part only; zero otherwise).
+    isf     : ndarray — intermediate scattering function F(k, τ)
+              (populated by plot_isf()).
+    plot    : Figure — most recently produced plot figure.
     """
     def __init__(self, traj, at_g1, at_g2=None, r_bins=100, r_range=[0.0, 5.0], tau_sep=None, tau_range=[0.0, 5.0]):
         self.traj = traj
@@ -586,14 +884,54 @@ class VHCF(object):
         self.volume = np.full(shape=self.settings.bins, fill_value=vol_scalar, dtype=np.float64)
 
     def calculate(self, plot=False, tau_sel=None, r_sel=None, plot_vs="r", zlim=None, levels=60, cmap=None, save_fig=None, **kwargs):
+        """Compute G(r, τ), RPD, α₂, and MSD, then optionally plot.
+
+        Parameters
+        ----------
+        plot : bool, optional
+            If True, call ``plot_probability_density`` after the calculation.
+            Default: False.
+        tau_sel : list of float, optional
+            Selected τ values in ps for which a 1D slice through G(r, τ) is plotted
+            alongside the 2D contour (used when plot=True and plot_vs="r").
+        r_sel : list of float, optional
+            Selected r values in Å for which a 1D slice through G(r, τ) is plotted
+            alongside the 2D contour (used when plot=True and plot_vs="tau").
+        plot_vs : {"r", "tau"}, optional
+            Axis orientation for the 2D contour: "r" (default) puts distance on
+            the x-axis and time on the y-axis; "tau" swaps the axes.
+        zlim : ignored
+            Reserved for future use.
+        levels : int, optional
+            Number of contour levels in the 2D plot. Default: 60.
+        cmap : matplotlib colormap, optional
+            Colormap for the 2D contour plot. Defaults to a built-in diverging ramp.
+        save_fig : str or None, optional
+            If provided, save the figure to this file path at 300 dpi.
+
+        Returns
+        -------
+        results : dataclass
+            Populated results object; see class docstring for field descriptions.
+        """
         N_pairs = len(self.pairs)
         bin_widths = np.diff(self.results.r_edges)
         
         if self.is_self:
+            # Self-part tracks the same atom over time: MIC must NOT be applied here
+            # because it would alias large displacements that cross the box boundary.
+            # The trajectory must use unwrapped (non-wrapped) coordinates for correct
+            # MSD and non-Gaussian parameter values. Call traj.calib() but NOT wrap2box().
+            warnings.warn(
+                "VHCF self-part requires unwrapped coordinates. "
+                "Do not call wrap2box() before this calculation; "
+                "use calib() only so atoms are free to diffuse beyond one box length.",
+                stacklevel=2,
+            )
             for i, tau in enumerate(self.results.tau):
                 sep = int(round(1000 * tau / self.traj.timestep))
                 n_frames_eval = self.traj.nframes - sep
-                
+
                 if n_frames_eval <= 0: continue
 
                 dists = np.asarray([np.linalg.norm(self.traj.frames[j + sep].pos[self.pairs[:,1]] - self.traj.frames[j].pos[self.pairs[:,0]], axis=1) for j in range(n_frames_eval)])
@@ -614,15 +952,25 @@ class VHCF(object):
                 
         else:
             vols = 4/3 * np.pi * np.diff(np.power(self.results.r_edges, 3))
-            density = N_pairs / self.volume[0] 
-            
+            density = N_pairs / self.volume[0]
+            cell = self.traj.frames[0].cell
+
+            # Vectorised MIC distance for (N,3) position arrays — defined once.
+            def _mic_norm(pos_a, pos_b):
+                d = cart2xys(pos_b - pos_a, cell)
+                d -= np.round(d)
+                return np.linalg.norm(xys2cart(d, cell), axis=1)
+
             for i, tau in enumerate(self.results.tau):
                 sep = int(round(1000 * tau / self.traj.timestep))
                 n_frames_eval = self.traj.nframes - sep
-                
+
                 if n_frames_eval <= 0: continue
 
-                dists = np.asarray([np.linalg.norm(self.traj.frames[j + sep].pos[self.pairs[:,1]] - self.traj.frames[j].pos[self.pairs[:,0]], axis=1) for j in range(n_frames_eval)])
+                dists = np.asarray([_mic_norm(
+                    self.traj.frames[j].pos[self.pairs[:, 0]],
+                    self.traj.frames[j + sep].pos[self.pairs[:, 1]],
+                ) for j in range(n_frames_eval)])
                 counts, _ = np.histogram(dists, **asdict(self.settings))
                 
                 self.results.g_rt[i] = counts / (density * vols * n_frames_eval)
@@ -642,7 +990,34 @@ class VHCF(object):
         return cmap
 
     def plot_probability_density(self, tau_sel=None, r_sel=None, plot_vs="r", levels=50, cmap=None, tau_lim=None, r_lim=None, saturation_factor=1.0, save_fig=None):
-        """Visualizes the raw probability density function G(r,t)."""
+        """Plot the Van Hove correlation function G(r, τ) as a 2D contour.
+
+        For the self-part, G_s peaks sharply at r = 0 at short τ and broadens as
+        atoms diffuse. For the distinct-part, G_d shows structural peaks at τ = 0
+        that flatten toward 1 as the liquid structure decorrelates over time.
+
+        Parameters
+        ----------
+        tau_sel : list of float, optional
+            τ values in ps for which a 1D G(r) slice is plotted (requires plot_vs="r").
+        r_sel : list of float, optional
+            r values in Å for which a 1D G(τ) slice is plotted (requires plot_vs="tau").
+        plot_vs : {"r", "tau"}, optional
+            Axis orientation: "r" puts distance on the x-axis (default); "tau" swaps.
+        levels : int, optional
+            Number of contour levels. Default: 50.
+        cmap : matplotlib colormap, optional
+            Colormap; defaults to the built-in diverging ramp.
+        tau_lim : tuple of float, optional
+            (τ_min, τ_max) axis limits in ps.
+        r_lim : tuple of float, optional
+            (r_min, r_max) axis limits in Å.
+        saturation_factor : float, optional
+            Fraction of the colour range to use; values < 1 saturate the high end
+            and reveal fine structure at low density. Default: 1.0.
+        save_fig : str or None, optional
+            File path to save the figure at 300 dpi.
+        """
         cmap = self._get_cmap(cmap)
         
         zmin, zmax = np.nanmin(self.results.g_rt), np.nanmax(self.results.g_rt)
@@ -715,7 +1090,35 @@ class VHCF(object):
         plt.show()
 
     def plot_radial_probability(self, tau_sel=None, r_sel=None, plot_vs="r", levels=50, cmap=None, tau_lim=None, r_lim=None, saturation_factor=1.0, save_fig=None):
-        """Visualizes the Radial Probability Distribution (RPD = 4 * pi * r^2 * G(r,t))."""
+        """Plot the radial probability distribution RPD(r, τ) = 4π r² G(r, τ).
+
+        RPD is the probability density weighted by shell volume. Unlike G(r, τ),
+        which diverges at r = 0 for the self-part, RPD goes to zero at r = 0 and
+        peaks at the most probable displacement distance. Integrating RPD over r
+        gives 1 for the self-part at any τ. Secondary peaks at intermediate τ values
+        are a signature of discrete atomic hopping between lattice sites.
+
+        Parameters
+        ----------
+        tau_sel : list of float, optional
+            τ values in ps for 1D RPD(r) slices (requires plot_vs="r").
+        r_sel : list of float, optional
+            r values in Å for 1D RPD(τ) slices (requires plot_vs="tau").
+        plot_vs : {"r", "tau"}, optional
+            Axis orientation. Default: "r".
+        levels : int, optional
+            Number of contour levels. Default: 50.
+        cmap : matplotlib colormap, optional
+            Colormap; defaults to the built-in diverging ramp.
+        tau_lim : tuple of float, optional
+            (τ_min, τ_max) axis limits in ps.
+        r_lim : tuple of float, optional
+            (r_min, r_max) axis limits in Å.
+        saturation_factor : float, optional
+            Fraction of the colour range to display. Default: 1.0.
+        save_fig : str or None, optional
+            File path to save the figure at 300 dpi.
+        """
         cmap = self._get_cmap(cmap)
         
         zmin, zmax = np.nanmin(self.results.rpd), np.nanmax(self.results.rpd)
@@ -788,7 +1191,17 @@ class VHCF(object):
         plt.show()
 
     def plot_msd(self, save_fig=None):
-        """Visualizes the Mean Squared Displacement on a log-log scale."""
+        """Plot the mean squared displacement ⟨Δr²⟩(τ) on a log–log scale.
+
+        Only available for the self-part (``at_g2=None``). The log–log slope reveals
+        the diffusion regime: slope ≈ 2 indicates ballistic (inertial) motion at very
+        short times; slope ≈ 0 indicates caging; slope = 1 indicates Fickian diffusion.
+
+        Parameters
+        ----------
+        save_fig : str or None, optional
+            File path to save the figure at 300 dpi.
+        """
         if not self.is_self:
             print("-" * 75)
             print(" NOTE: Mean Squared Displacement (MSD) calculation skipped.")
@@ -814,7 +1227,27 @@ class VHCF(object):
         plt.show()
 
     def plot_isf(self, k_val=2.5, save_fig=None):
-        """Computes and plots the Intermediate Scattering Function F(k,t)."""
+        """Compute and plot the intermediate scattering function F(k, τ).
+
+        The ISF is the spatial Fourier transform of G(r, τ) at wavevector magnitude k,
+        directly comparable to incoherent (self-part) or coherent (distinct-part)
+        neutron and X-ray scattering data:
+
+            F_s(k, τ) = ∫ RPD(r, τ) · sin(kr)/(kr) dr    (self-part)
+            F_d(k, τ) = ∫ 4π r² ρ [G_d(r, τ) − 1] · sin(kr)/(kr) dr   (distinct-part)
+
+        For the self-part, F_s decays from 1 to 0; the time at which F_s = 1/e defines
+        the alpha-relaxation time τ_α. A two-step decay indicates glassy dynamics.
+
+        Parameters
+        ----------
+        k_val : float, optional
+            Wavevector magnitude in Å⁻¹ at which the ISF is evaluated. Choose a value
+            near the first peak of the static structure factor S(k) for maximum
+            sensitivity to structural relaxation. Default: 2.5 Å⁻¹.
+        save_fig : str or None, optional
+            File path to save the figure at 300 dpi.
+        """
         self.results.isf = np.zeros(len(self.results.tau))
         dr = np.diff(self.results.r_edges)
         
@@ -851,7 +1284,12 @@ class VHCF(object):
         plt.show()
 
     def summary(self):
-        """Prints a comprehensive scientific interpretation of the calculated parameters and visualisations."""
+        """Print a scientific interpretation of all computed observables.
+
+        Summarises the calculation mode, time and spatial ranges, and interprets the
+        non-Gaussian parameter α₂ peak for the self-part. Also describes the physical
+        meaning of each visualisation method to guide analysis.
+        """
         print("="*75)
         print(" VAN HOVE CORRELATION FUNCTION - COMPREHENSIVE SUMMARY")
         print("="*75)
