@@ -1,172 +1,329 @@
-import mmap
-import numpy as np
-import os
-import warnings
-from typing import List, Tuple, Union, Optional, Any, Sequence
-from fishmol.atoms import Atoms
+"""
+Trajectory object for MD post-processing.
 
-class Trajectory(object):
-    """
-    Trajectory object.
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Reads extended XYZ files via :mod:`fishmol.io`, which parses per-frame
+``Lattice=`` fields automatically.  This makes both NVT (fixed cell) and
+NPT (variable cell) trajectories transparent to callers: each
+:class:`~fishmol.atoms.Atoms` frame carries its own ``.cell``.
+"""
+
+import numpy as np
+import warnings
+from typing import Any, List, Optional, Sequence, Tuple, Union
+
+from fishmol.atoms import Atoms
+from fishmol import io as _io
+
+
+class Trajectory:
+    """An ordered sequence of :class:`~fishmol.atoms.Atoms` frames.
+
+    Parameters
+    ----------
+    timestep : float
+        Nominal time step between consecutive stored frames in **fs**.
+    data : str, optional
+        Path to an extended XYZ trajectory file.  When supplied the file is
+        read immediately; *natoms*, *nframes*, and *frames* are derived from
+        it and must not be passed as well.
+    natoms : int, optional
+        Number of atoms per frame — required when *data* is not given.
+    nframes : int, optional
+        Number of frames — required when *data* is not given.
+    frames : list of :class:`~fishmol.atoms.Atoms`, optional
+        Pre-built frame list — required when *data* is not given.
+    index : str or int or slice, optional
+        Frame selection passed directly to :func:`~fishmol.io.read_extxyz`.
+        ``':'`` (default) reads every frame.
+    cell : array-like of shape (3, 3) or None, optional
+        Fallback cell (lattice vectors as rows, in Å) used when the
+        trajectory file does not contain ``Lattice=`` fields — typical for
+        NVT output from CP2K ``FORMAT XYZ``.  When the file **does** contain
+        ``Lattice=`` in every frame (NPT output) this argument can be omitted
+        entirely; the per-frame cell is read automatically.
+
     Attributes
-    timestep : int, the time interval between two frames
-    natoms: int, the number of atoms in each frame
-    nframes: int, the number of frames in the trajectory
-    frames: a list of frames in the trajectory. The frame is an Atoms object.
-    
-    Methods
-    Selecting and slicing: select the specified 
+    ----------
+    timestep : float
+    natoms : int
+    nframes : int
+    frames : list of Atoms
+
+    Examples
+    --------
+    NVT — cell supplied by caller (file has no ``Lattice=``):
+
+    >>> cell = [[21.29, 0, 0], [-4.60, 20.79, 0], [-0.97, -1.21, 15.11]]
+    >>> traj = Trajectory(timestep=5, data="nvt.xyz", cell=cell)
+
+    NPT — cell read automatically from each frame's ``Lattice=``:
+
+    >>> traj = Trajectory(timestep=5, data="npt.xyz")
+    >>> traj.frames[0].cell.lattice   # first-frame cell (3,3) array
+    >>> traj.frames[-1].cell.lattice  # last-frame cell (different for NPT)
     """
-    def __init__(self, timestep: float, data: Optional[str] = None, natoms: Optional[int] = None, nframes: Optional[int] = None, frames: Optional[List[Atoms]] = None, index: Optional[Union[int, slice, str]] = None, cell: Any = None) -> None:
+
+    def __init__(
+        self,
+        timestep: float,
+        data: Optional[str] = None,
+        natoms: Optional[int] = None,
+        nframes: Optional[int] = None,
+        frames: Optional[List[Atoms]] = None,
+        index: Optional[Union[int, slice, str]] = None,
+        cell: Any = None,
+    ) -> None:
         self.timestep = timestep
         self.data = data
-        if index is None:
-            self.index = ":"
-        else:
-            self.index = index
-        self.cell = cell
+        self.index = index if index is not None else ':'
+        self._cell_fallback = cell   # explicit cell provided by caller
+
         if self.data is not None:
-            self.natoms, self.nframes, self.frames = self.read(data)
+            self.natoms, self.nframes, self.frames, self.timestep = _io.read_extxyz(
+                path=self.data,
+                index=self.index,
+                timestep=self.timestep,
+                cell=cell,
+            )
         else:
             self.natoms = natoms
             self.nframes = nframes
             self.frames = frames
-      
-    def __len__(self):
+
+    # ── cell convenience property ─────────────────────────────────────────────
+
+    @property
+    def cell(self) -> Any:
+        """Cell of the first frame (backward-compatible convenience accessor).
+
+        For NVT trajectories this is the same for every frame.  For NPT
+        trajectories each frame's ``.cell`` may differ; this property returns
+        only the first frame's cell as a summary.
+
+        Returns ``None`` when no frames are loaded or the first frame has no
+        cell information.
+        """
+        if self.frames:
+            fc = self.frames[0].cell
+            if fc is not None:
+                return fc.lattice
+        return None
+
+    @property
+    def is_npt(self) -> bool:
+        """True when consecutive frames have detectably different cells."""
+        if not self.frames or len(self.frames) < 2:
+            return False
+        c0 = getattr(self.frames[0].cell, 'lattice', None)
+        c1 = getattr(self.frames[-1].cell, 'lattice', None)
+        if c0 is None or c1 is None:
+            return False
+        return not np.allclose(np.asarray(c0), np.asarray(c1))
+
+    # ── sequence protocol ─────────────────────────────────────────────────────
+
+    def __len__(self) -> int:
         return len(self.frames)
-    
+
     def __iter__(self):
         return iter(self.frames)
-    
+
     def __getitem__(self, n: Union[int, slice, Sequence[int]]) -> 'Trajectory':
-        """
-        Enable slicing and selecting frames from a Trajectory, returns a new Trajectory object.
+        """Slice or index frames, returning a new Trajectory.
+
+        The effective timestep is multiplied by the slice step so that
+        physical time labels remain correct.
         """
         new_timestep = self.timestep
+
         if isinstance(n, int):
-            if n < 0 : #Handle negative indices
+            if n < 0:
                 n += self.nframes
             if n < 0 or n >= self.nframes:
-                warnings.warn(f"The index ({n}) is out of bounds (nframes={self.nframes}).")
-                raise IndexError("The index (%d) is out of range."%n)
-            frames = [self.frames[n],]
-        elif isinstance(n, tuple) or isinstance(n, list):
+                raise IndexError(
+                    f"Frame index {n} is out of range (nframes={self.nframes})."
+                )
+            frames = [self.frames[n]]
+
+        elif isinstance(n, (tuple, list)):
             frames = [self.frames[x] for x in n]
+
         elif isinstance(n, slice):
-            start = n.start
-            stop = n.stop
-            step = n.step
-            if start is None:
-                start = 0
-            if stop is None:
-                stop = self.nframes
-            if step is None:
-                step = 1
+            start = n.start or 0
+            stop = n.stop if n.stop is not None else self.nframes
+            step = n.step or 1
             frames = [self.frames[x] for x in range(start, stop, step)]
             new_timestep = self.timestep * step
+
         else:
-            raise TypeError("Invalid argument type.")
-        return self.__class__(timestep=new_timestep, natoms=self.natoms, nframes=len(frames), frames=frames, index=n, cell=self.cell)
-    
-    def read(self, data: str) -> tuple:
-        """
-        Fast read trajectory data using mmap.
-        """
-        with open(data) as f:
-            mm = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
-            frames = [line.strip().decode('utf8') for line in iter(mm.readline, b"")] # numpy datatype object, one element is string , the other is 3 floats
-            mm.close()
-        f.close()
-        header = frames[0]
-        natoms = int(header)
-        prop = frames[1].split("=")
-        dt = np.dtype([('symbol', np.str_, 2), ('position', np.float64, (3,))]) # numpy datatype object, element symbol is string , the position is an array of 3 floats
-        # Store each line as a numpy array
-        index = self.index
-        nframes = frames.count(frames[0])
-        if index == ":" or index == "all":
-            step = 1
-            frames = [np.array((line.split()[0], line.split()[-3:]), dtype=dt)
-                      for line in frames if not (line.startswith(header) or line.startswith(prop[0]))]
-        
-        if isinstance(index, slice):
-            start = index.start
-            stop = index.stop
-            step = index.step
-            if start is None:
-                start = 0
-            if stop is None:
-                stop = nframes
-            if step is None:
-                step = 1
-            self.timestep *= step
-            frames = frames[start*(natoms+2):stop*(natoms+2)]
-            nframes = frames.count(header)
-            frames = [np.array((line.split()[0], line.split()[-3:]), dtype=dt) 
-                      for line in frames if not (line.startswith(header) or line.startswith(prop[0]))]
-        # split the trajectory into frames
-        frames = [frame2atoms(np.array(frames[x:x + natoms]), cell = self.cell) for x in range(0, len(frames), natoms)][::step]
-        return natoms, nframes, frames
-    
+            raise TypeError(f"Invalid index type: {type(n).__name__!r}.")
+
+        return self.__class__(
+            timestep=new_timestep,
+            natoms=self.natoms,
+            nframes=len(frames),
+            frames=frames,
+            index=n,
+            cell=self._cell_fallback,
+        )
+
+    # ── I/O ──────────────────────────────────────────────────────────────────
+
     def write(self, filename: Optional[str] = None) -> None:
+        """Write the trajectory to an extended XYZ file.
+
+        Each frame's cell is encoded as ``Lattice=`` in the comment line so
+        that NPT trajectories round-trip correctly through
+        :func:`~fishmol.io.read_extxyz`.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Output path.  Defaults to ``"trajectory.xyz"``.  If the file
+            already exists a numeric suffix is appended automatically.
         """
-        Write trajectory into xyz file. Filtering atoms is supported by passing index, list of indices or slice object. If inverse_select, the atoms not in the select list will be write into xyz file.
-        """
-        # Filename
         if filename is None:
             filename = "trajectory.xyz"
-        
-        if os.path.exists(filename):
-            while True:
-                filename = "".join(filename.split(".")[:-1]) + "-1.xyz"
-                if not os.path.exists(filename):
-                    print(f"The filename already exists, file saved to {filename}")
-                    break
-        else:
-            pass
+        _io.write_extxyz(
+            frames=self.frames,
+            filename=filename,
+            natoms=self.natoms,
+            timestep=self.timestep,
+        )
 
-        with open(filename, "a") as f:
-            for i, frame in enumerate(self.frames):
-                f.write(str(self.natoms) + f"\n Properties = frame: {i}, t: {i*self.timestep} fs, Cell: {self.cell}\n")
-                np.savetxt(f, np.concatenate(((frame.symbs).reshape((self.natoms,1)), frame.pos), axis=1),
-                           fmt="%-2s %s %s %s")
-            f.close()
-    
-    def calib(self, save: bool = False, filename: Optional[str] = None) -> 'Trajectory':
-        """
-        Calibrate the trajectory by center of mass.
+    # ── trajectory operations ─────────────────────────────────────────────────
+
+    def calib(
+        self,
+        save: bool = False,
+        filename: Optional[str] = None,
+    ) -> 'Trajectory':
+        """Remove centre-of-mass drift, aligning all frames to frame 0.
+
+        Parameters
+        ----------
+        save : bool
+            If True, also write the calibrated trajectory to *filename*.
+        filename : str, optional
+            Output path when *save* is True.  Defaults to the source filename
+            with ``_calibrated`` appended before the extension.
+
+        Returns
+        -------
+        self
+            Returns ``self`` to allow method chaining.
         """
         com_0 = self.frames[0].calc_com()
+
         if save:
-            if filename is None:
-                filename = self.data
-                filename = "".join(filename.split(".")[:-1]) + "_calibrated.xyz"
-            with open(filename, "a") as f:
-                for i, frame in enumerate(self):
-                    com = frame.calc_com()
-                    shift = com_0 - com
-                    frame.pos = shift + frame.pos
-                    f.write(str(self.natoms) + f"\n Properties = frame: {i}, t: {i*self.timestep} fs, Cell: {self.cell}\n")
-                    np.savetxt(f, np.concatenate(((frame.symbs).reshape((self.natoms,1)), frame.pos), axis=1),
-                               delimiter=',', fmt = "%-2s %s %s %s")
-            f.close()
-            print(f"Calibrated trajectory saved to {filename}")
-        
+            if filename is None and self.data is not None:
+                base, ext = self.data.rsplit('.', 1)
+                filename = f"{base}_calibrated.{ext}"
+            elif filename is None:
+                filename = "trajectory_calibrated.xyz"
+
+            for frame in self:
+                shift = com_0 - frame.calc_com()
+                frame.pos = frame.pos + shift
+
+            _io.write_extxyz(
+                frames=self.frames,
+                filename=filename,
+                natoms=self.natoms,
+                timestep=self.timestep,
+            )
+            print(f"Calibrated trajectory written to {filename!r}")
         else:
             for frame in self:
-                com = frame.calc_com()
-                shift = com_0 - com
-                frame.pos = shift + frame.pos
+                shift = com_0 - frame.calc_com()
+                frame.pos = frame.pos + shift
+
         return self
-    
-    def wrap2box(self, center: Tuple[float, float, float] = (0.5, 0.5, 0.5), pretty_translation: bool = False, eps: float = 1e-7) -> 'Trajectory':
+
+    def wrap2box(
+        self,
+        center: Tuple[float, float, float] = (0.5, 0.5, 0.5),
+        pretty_translation: bool = False,
+        eps: float = 1e-7,
+    ) -> 'Trajectory':
+        """Wrap all atomic positions into the primary unit cell.
+
+        For NPT trajectories each frame is wrapped with its own cell.
+
+        Parameters
+        ----------
+        center : tuple of float
+            Fractional centre of the wrapping target box (default: box centre).
+        pretty_translation : bool
+            If True, translate positions to minimise fractional coordinates
+            (useful for visualisation).
+        eps : float
+            Small shift applied to the wrapping boundary.
+
+        Returns
+        -------
+        self
+        """
         for frame in self.frames:
-            frame = frame.wrap_pos(center = center, pretty_translation = pretty_translation, eps = eps)
+            frame.wrap_pos(
+                center=center,
+                pretty_translation=pretty_translation,
+                eps=eps,
+            )
         return self
-    
-def frame2atoms(frame: np.ndarray, cell: Any = None, basis: str = 'Cartesian') -> Atoms:
+
+
+# ── Module-level helper ────────────────────────────────────────────────────────
+
+def frame2atoms(
+    frame,
+    cell=None,
+    basis: str = 'Cartesian',
+) -> Atoms:
+    """Convert a structured-array frame or an existing :class:`~fishmol.atoms.Atoms` to Atoms.
+
+    This helper exists for backward compatibility with analysis code that calls
+    ``frame2atoms`` directly.  The *cell* argument is now optional: when omitted
+    and *frame* is already an :class:`~fishmol.atoms.Atoms` instance, the
+    frame's own per-frame cell is preserved automatically.  This is the correct
+    behaviour for NPT trajectories where each frame carries a different cell.
+
+    Parameters
+    ----------
+    frame : structured ndarray or :class:`~fishmol.atoms.Atoms`
+        Either a NumPy structured array with ``'symbol'`` and ``'position'``
+        fields (legacy format produced by the old mmap reader) or an
+        :class:`~fishmol.atoms.Atoms` object.
+    cell : array-like of shape (3, 3) or cell dataobject or None, optional
+        Explicit cell override.  When *None* and *frame* is an
+        :class:`~fishmol.atoms.Atoms` instance, the frame's existing cell is
+        used unchanged.  When *None* and *frame* is a raw structured array,
+        the returned :class:`~fishmol.atoms.Atoms` has no cell set.
+    basis : str, optional
+        Coordinate system of the positions.  Default: ``'Cartesian'``.
+
+    Returns
+    -------
+    :class:`~fishmol.atoms.Atoms`
+        An Atoms object carrying the resolved cell.
+
+    Examples
+    --------
+    >>> # NPT: each frame has its own cell — no cell argument needed
+    >>> atoms = frame2atoms(traj.frames[i])
+    >>> atoms.cell.lattice   # correct per-frame cell
+
+    >>> # Legacy: build from a raw structured array
+    >>> atoms = frame2atoms(raw_array, cell=my_cell)
+    """
+    if isinstance(frame, Atoms):
+        if cell is not None:
+            # Caller explicitly requests a different cell — build a new Atoms
+            return Atoms(symbs=frame.symbs, pos=frame.pos, cell=cell, basis=basis)
+        # Preserve the frame's own cell (handles NPT correctly)
+        return frame
+
+    # Legacy path: numpy structured array with 'symbol' and 'position' fields
     symbs = frame[:]["symbol"]
     pos = frame[:]["position"]
-    atoms = Atoms(symbs = symbs, pos = pos, cell = cell, basis = basis)
-    return atoms
+    return Atoms(symbs=symbs, pos=pos, cell=cell, basis=basis)

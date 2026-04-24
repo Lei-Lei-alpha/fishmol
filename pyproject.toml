@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 authors = [
-    {name = "Lei Lei", email = "Lei.Lei@durham.ac.uk"}
+    {name = "Lei Lei", email = "Lei.Lei2@nottingham.ac.uk"}
 ]
 keywords = [
     "molecular dynamics", "trajectory analysis", "radial distribution function",
