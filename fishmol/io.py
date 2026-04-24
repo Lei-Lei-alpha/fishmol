@@ -1,13 +1,16 @@
 """
-Fast I/O for extended XYZ trajectory files.
+Fast I/O for MD trajectory files.
 
-Provides two public helpers used by :mod:`fishmol.trj`:
+Provides public helpers used by :mod:`fishmol.trj`:
 
-- :func:`read_extxyz` — memory-mapped reader that parses per-frame
-  ``Lattice=`` fields, enabling NPT trajectories where the cell changes
-  between frames.
+- :func:`read_extxyz` — memory-mapped reader for extended XYZ files that
+  parses per-frame ``Lattice=`` fields, enabling NPT trajectories.
 - :func:`write_extxyz` — writer that embeds ``Lattice=`` in every comment
   line so files are round-trippable.
+- :func:`read_lammpstrj` — reader for LAMMPS dump files (``.lammpstrj``),
+  supporting both orthogonal and triclinic boxes, all coordinate styles
+  (``x y z``, ``xs ys zs``, ``xu yu zu``), and both ``element`` and integer
+  ``type`` columns.
 
 Extended XYZ comment-line conventions understood:
 
@@ -329,3 +332,283 @@ def write_extxyz(
 
             for sym, (x, y, z) in zip(frame.symbs, frame.pos):
                 fh.write(f"{sym:<3s} {x:>18.8f} {y:>18.8f} {z:>18.8f}\n")
+
+
+# ── LAMMPS dump reader ─────────────────────────────────────────────────────────
+
+def _lammps_cell(
+    box_header: str,
+    bound_lines: List[str],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Parse an ``ITEM: BOX BOUNDS`` block into a cell matrix and origin.
+
+    Handles both orthogonal (6 values) and triclinic (9 values, ``xy xz yz``
+    tilt factors) LAMMPS boxes.
+
+    Parameters
+    ----------
+    box_header : str
+        The ``ITEM: BOX BOUNDS …`` line (used to detect triclinic).
+    bound_lines : list of str
+        The three data lines that follow (xlo/xhi[/xy], ylo/yhi[/xz],
+        zlo/zhi[/yz]).
+
+    Returns
+    -------
+    cell : (3, 3) ndarray
+        Lattice vectors as rows: ``a = cell[0]``, ``b = cell[1]``,
+        ``c = cell[2]``.
+    origin : (3,) ndarray
+        Cartesian position of the box corner ``(xlo, ylo, zlo)``.
+    """
+    triclinic = 'xy' in box_header
+
+    vals = [list(map(float, ln.split())) for ln in bound_lines]
+
+    if triclinic:
+        xlo_b, xhi_b, xy = vals[0][0], vals[0][1], vals[0][2]
+        ylo_b, yhi_b, xz = vals[1][0], vals[1][1], vals[1][2]
+        zlo_b, zhi_b, yz = vals[2][0], vals[2][1], vals[2][2]
+
+        # Recover true lo/hi from the reported boundary-extended values
+        xlo = xlo_b - min(0.0, xy, xz, xy + xz)
+        xhi = xhi_b - max(0.0, xy, xz, xy + xz)
+        ylo = ylo_b - min(0.0, yz)
+        yhi = yhi_b - max(0.0, yz)
+        zlo, zhi = zlo_b, zhi_b
+
+        lx, ly, lz = xhi - xlo, yhi - ylo, zhi - zlo
+        cell = np.array([
+            [lx,  0.0, 0.0],
+            [xy,  ly,  0.0],
+            [xz,  yz,  lz],
+        ])
+    else:
+        xlo, xhi = vals[0][0], vals[0][1]
+        ylo, yhi = vals[1][0], vals[1][1]
+        zlo, zhi = vals[2][0], vals[2][1]
+        cell = np.diag([xhi - xlo, yhi - ylo, zhi - zlo])
+
+    return cell.astype(float), np.array([xlo, ylo, zlo], dtype=float)
+
+
+def read_lammpstrj(
+    path: str,
+    index: Union[str, slice, int] = ':',
+    timestep: float = 1.0,
+    cell: Any = None,
+    type_map: Optional[dict] = None,
+    sort_by_id: bool = True,
+) -> Tuple[int, int, list, float]:
+    """Read a LAMMPS dump trajectory file.
+
+    Supports both orthogonal and triclinic simulation boxes, and all three
+    LAMMPS coordinate styles:
+
+    * ``x y z``   — wrapped Cartesian (metal/real units: Å)
+    * ``xu yu zu`` — unwrapped Cartesian
+    * ``xs ys zs`` — scaled (fractional) coordinates
+
+    Atom symbols are read from an ``element`` column when present.  When only
+    an integer ``type`` column is available, *type_map* must be supplied.
+
+    Positions are stored relative to the box origin so that they are
+    consistent with the cell matrix (fractional coords in ``[0, 1)`` after
+    wrapping, MIC operations work correctly).
+
+    Parameters
+    ----------
+    path : str
+        Path to the LAMMPS dump / ``.lammpstrj`` file.
+    index : str, int, or slice
+        Frame selection — same semantics as :func:`read_extxyz`.
+    timestep : float
+        Nominal time step between consecutive stored frames in **fs**.
+    cell : array-like of shape (3, 3) or None
+        Optional cell override applied to every frame (rarely needed; each
+        frame's box is read from the file header).
+    type_map : dict or None
+        Mapping from integer LAMMPS atom type to element symbol, e.g.
+        ``{1: 'O', 2: 'H'}``.  Required when the dump uses a ``type``
+        column.  Ignored when an ``element`` column is present.
+    sort_by_id : bool
+        If True (default), atom rows are reordered by LAMMPS atom ``id``
+        so that the same physical atom occupies the same row in every frame.
+
+    Returns
+    -------
+    natoms : int
+    nframes : int
+    frames : list of :class:`~fishmol.atoms.Atoms`
+    effective_timestep : float
+
+    Raises
+    ------
+    ValueError
+        If the file is empty, contains no ``ITEM: TIMESTEP`` blocks, or an
+        integer ``type`` column is found without a *type_map*.
+    IndexError
+        If the requested frame index is out of range.
+
+    Examples
+    --------
+    Orthogonal NVT dump with ``element`` column:
+
+    >>> natoms, nframes, frames, dt = read_lammpstrj("dump.lammpstrj")
+
+    Triclinic NPT dump with integer type column:
+
+    >>> natoms, nframes, frames, dt = read_lammpstrj(
+    ...     "dump.lammpstrj",
+    ...     type_map={1: 'O', 2: 'H'},
+    ... )
+    """
+    from fishmol.atoms import Atoms
+
+    dc_cell = make_dataclass("Cell", "lattice")
+
+    with open(path, 'rb') as fh:
+        mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
+        raw = [
+            line.decode('utf-8', errors='replace').rstrip('\r\n')
+            for line in iter(mm.readline, b'')
+        ]
+        mm.close()
+
+    if not raw:
+        raise ValueError(f"File {path!r} is empty.")
+
+    # Each frame starts with "ITEM: TIMESTEP"
+    frame_starts = [
+        i for i, ln in enumerate(raw)
+        if ln.strip().startswith("ITEM: TIMESTEP")
+    ]
+    if not frame_starts:
+        raise ValueError(
+            f"No LAMMPS frames (ITEM: TIMESTEP) found in {path!r}."
+        )
+
+    nframes = len(frame_starts)
+    natoms = int(raw[frame_starts[0] + 3].strip())
+
+    # ── Resolve index ─────────────────────────────────────────────────────────
+    step = 1
+    if index in (':', 'all'):
+        frame_ids = list(range(nframes))
+    elif isinstance(index, int):
+        n = index if index >= 0 else nframes + index
+        if n < 0 or n >= nframes:
+            raise IndexError(
+                f"Frame index {index} is out of range for a trajectory with "
+                f"{nframes} frames."
+            )
+        frame_ids = [n]
+    elif isinstance(index, slice):
+        start = index.start or 0
+        stop = index.stop if index.stop is not None else nframes
+        step = index.step or 1
+        frame_ids = list(range(start, stop, step))
+    else:
+        frame_ids = list(index)
+
+    effective_timestep = timestep * step
+
+    _fallback_cell = dc_cell(np.asarray(cell, dtype=float)) if cell is not None else None
+
+    # ── Parse frames ──────────────────────────────────────────────────────────
+    frames: List = []
+    for fi in frame_ids:
+        s = frame_starts[fi]
+        # Frame layout (line offsets from s):
+        #  0: ITEM: TIMESTEP
+        #  1: <timestep>
+        #  2: ITEM: NUMBER OF ATOMS
+        #  3: <natoms>
+        #  4: ITEM: BOX BOUNDS [xy xz yz] <px> <py> <pz>
+        #  5-7: box bound data (3 lines)
+        #  8: ITEM: ATOMS <col1> <col2> …
+        #  9…9+natoms-1: atom data
+
+        natoms_frame = int(raw[s + 3].strip())
+        cell_arr, origin = _lammps_cell(raw[s + 4], raw[s + 5: s + 8])
+
+        col_names = raw[s + 8].replace("ITEM: ATOMS", "").split()
+        col_idx = {name: j for j, name in enumerate(col_names)}
+
+        # Symbol column
+        if 'element' in col_idx:
+            sym_c = col_idx['element']
+            use_type_map = False
+        elif 'type' in col_idx:
+            sym_c = col_idx['type']
+            use_type_map = True
+        else:
+            raise ValueError(
+                f"Frame {fi} in {path!r} has neither 'element' nor 'type' "
+                f"column in: {raw[s + 8]!r}"
+            )
+
+        if use_type_map and type_map is None:
+            raise ValueError(
+                f"LAMMPS dump {path!r} uses integer atom types but no "
+                f"type_map was provided.  Pass type_map={{1: 'O', 2: 'H', …}}."
+            )
+
+        # Coordinate columns — prefer scaled, then unwrapped, then wrapped
+        if 'xs' in col_idx:
+            cx, cy, cz = col_idx['xs'], col_idx['ys'], col_idx['zs']
+            coord_style = 'scaled'
+        elif 'xsu' in col_idx:
+            cx, cy, cz = col_idx['xsu'], col_idx['ysu'], col_idx['zsu']
+            coord_style = 'scaled'
+        elif 'xu' in col_idx:
+            cx, cy, cz = col_idx['xu'], col_idx['yu'], col_idx['zu']
+            coord_style = 'cartesian'
+        else:
+            cx, cy, cz = col_idx['x'], col_idx['y'], col_idx['z']
+            coord_style = 'cartesian'
+
+        id_c = col_idx.get('id', None)
+
+        ids: List[int] = []
+        symbs: List[str] = []
+        coords: List[List[float]] = []
+
+        for ln in raw[s + 9: s + 9 + natoms_frame]:
+            parts = ln.split()
+            if id_c is not None:
+                ids.append(int(parts[id_c]))
+            symbs.append(
+                parts[sym_c] if not use_type_map
+                else type_map[int(parts[sym_c])]
+            )
+            coords.append([float(parts[cx]), float(parts[cy]), float(parts[cz])])
+
+        arr = np.array(coords, dtype=float)
+
+        # Sort by atom ID for consistent row order across frames
+        if sort_by_id and ids:
+            order = np.argsort(ids)
+            arr = arr[order]
+            symbs = [symbs[j] for j in order]
+
+        # Convert to Cartesian, origin-relative
+        if coord_style == 'scaled':
+            # r = xs*a + ys*b + zs*c  ↔  positions @ cell_arr
+            # (cell_arr rows are a, b, c)
+            positions = arr @ cell_arr
+        else:
+            # Absolute Cartesian → shift to box-origin frame
+            positions = arr - origin
+
+        frame_cell = _fallback_cell if _fallback_cell is not None else dc_cell(cell_arr)
+
+        frames.append(
+            Atoms(
+                symbs=np.array(symbs, dtype='<U2'),
+                pos=positions,
+                cell=frame_cell,
+            )
+        )
+
+    return natoms, nframes, frames, effective_timestep

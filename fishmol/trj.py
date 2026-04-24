@@ -1,10 +1,15 @@
 """
 Trajectory object for MD post-processing.
 
-Reads extended XYZ files via :mod:`fishmol.io`, which parses per-frame
-``Lattice=`` fields automatically.  This makes both NVT (fixed cell) and
-NPT (variable cell) trajectories transparent to callers: each
-:class:`~fishmol.atoms.Atoms` frame carries its own ``.cell``.
+Reads trajectory files via :mod:`fishmol.io`.  Supported formats:
+
+* Extended XYZ (``.xyz``, ``.extxyz``) — per-frame ``Lattice=`` fields are
+  parsed automatically, making both NVT and NPT trajectories transparent.
+* LAMMPS dump (``.lammpstrj``, ``.dump``) — orthogonal and triclinic boxes,
+  all coordinate styles (``x y z``, ``xs ys zs``, ``xu yu zu``), ``element``
+  column or integer ``type`` column (requires *type_map*).
+
+Each :class:`~fishmol.atoms.Atoms` frame carries its own ``.cell``.
 """
 
 import numpy as np
@@ -15,6 +20,10 @@ from fishmol.atoms import Atoms
 from fishmol import io as _io
 
 
+_LAMMPS_EXTS = frozenset({'.lammpstrj', '.dump', '.lammps'})
+_XYZ_EXTS    = frozenset({'.xyz', '.extxyz'})
+
+
 class Trajectory:
     """An ordered sequence of :class:`~fishmol.atoms.Atoms` frames.
 
@@ -23,9 +32,15 @@ class Trajectory:
     timestep : float
         Nominal time step between consecutive stored frames in **fs**.
     data : str, optional
-        Path to an extended XYZ trajectory file.  When supplied the file is
-        read immediately; *natoms*, *nframes*, and *frames* are derived from
-        it and must not be passed as well.
+        Path to a trajectory file.  The format is detected automatically
+        from the file extension:
+
+        * ``.xyz`` / ``.extxyz`` → extended XYZ (via :func:`~fishmol.io.read_extxyz`)
+        * ``.lammpstrj`` / ``.dump`` / ``.lammps`` → LAMMPS dump
+          (via :func:`~fishmol.io.read_lammpstrj`)
+
+        When supplied, *natoms*, *nframes*, and *frames* are derived from the
+        file and must not be passed as well.
     natoms : int, optional
         Number of atoms per frame — required when *data* is not given.
     nframes : int, optional
@@ -33,14 +48,16 @@ class Trajectory:
     frames : list of :class:`~fishmol.atoms.Atoms`, optional
         Pre-built frame list — required when *data* is not given.
     index : str or int or slice, optional
-        Frame selection passed directly to :func:`~fishmol.io.read_extxyz`.
-        ``':'`` (default) reads every frame.
+        Frame selection passed to the reader.  ``':'`` (default) reads every
+        frame.
     cell : array-like of shape (3, 3) or None, optional
-        Fallback cell (lattice vectors as rows, in Å) used when the
-        trajectory file does not contain ``Lattice=`` fields — typical for
-        NVT output from CP2K ``FORMAT XYZ``.  When the file **does** contain
-        ``Lattice=`` in every frame (NPT output) this argument can be omitted
-        entirely; the per-frame cell is read automatically.
+        Fallback cell (lattice vectors as rows, in Å).  For XYZ files, used
+        when the file omits ``Lattice=`` (e.g. CP2K ``FORMAT XYZ``).  For
+        LAMMPS files, overrides the per-frame box (rarely needed).
+    type_map : dict or None, optional
+        LAMMPS-only.  Mapping from integer atom type to element symbol, e.g.
+        ``{1: 'O', 2: 'H'}``.  Required when the dump uses a ``type``
+        column instead of an ``element`` column.
 
     Attributes
     ----------
@@ -51,16 +68,27 @@ class Trajectory:
 
     Examples
     --------
-    NVT — cell supplied by caller (file has no ``Lattice=``):
+    Extended XYZ — NVT, cell supplied by caller:
 
     >>> cell = [[21.29, 0, 0], [-4.60, 20.79, 0], [-0.97, -1.21, 15.11]]
     >>> traj = Trajectory(timestep=5, data="nvt.xyz", cell=cell)
 
-    NPT — cell read automatically from each frame's ``Lattice=``:
+    Extended XYZ — NPT, cell read from each frame's ``Lattice=``:
 
     >>> traj = Trajectory(timestep=5, data="npt.xyz")
-    >>> traj.frames[0].cell.lattice   # first-frame cell (3,3) array
-    >>> traj.frames[-1].cell.lattice  # last-frame cell (different for NPT)
+    >>> traj.frames[0].cell.lattice   # first-frame cell
+
+    LAMMPS dump — orthogonal box with ``element`` column:
+
+    >>> traj = Trajectory(timestep=2, data="dump.lammpstrj")
+
+    LAMMPS dump — triclinic box with integer type column:
+
+    >>> traj = Trajectory(
+    ...     timestep=2,
+    ...     data="dump.lammpstrj",
+    ...     type_map={1: 'O', 2: 'H'},
+    ... )
     """
 
     def __init__(
@@ -72,19 +100,37 @@ class Trajectory:
         frames: Optional[List[Atoms]] = None,
         index: Optional[Union[int, slice, str]] = None,
         cell: Any = None,
+        type_map: Optional[dict] = None,
     ) -> None:
         self.timestep = timestep
         self.data = data
         self.index = index if index is not None else ':'
-        self._cell_fallback = cell   # explicit cell provided by caller
+        self._cell_fallback = cell
+        self._type_map = type_map
 
         if self.data is not None:
-            self.natoms, self.nframes, self.frames, self.timestep = _io.read_extxyz(
-                path=self.data,
-                index=self.index,
-                timestep=self.timestep,
-                cell=cell,
-            )
+            import os as _os
+            _, ext = _os.path.splitext(self.data.lower())
+
+            if ext in _LAMMPS_EXTS:
+                self.natoms, self.nframes, self.frames, self.timestep = (
+                    _io.read_lammpstrj(
+                        path=self.data,
+                        index=self.index,
+                        timestep=self.timestep,
+                        cell=cell,
+                        type_map=type_map,
+                    )
+                )
+            else:
+                self.natoms, self.nframes, self.frames, self.timestep = (
+                    _io.read_extxyz(
+                        path=self.data,
+                        index=self.index,
+                        timestep=self.timestep,
+                        cell=cell,
+                    )
+                )
         else:
             self.natoms = natoms
             self.nframes = nframes
