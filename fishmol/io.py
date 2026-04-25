@@ -31,7 +31,7 @@ from recordclass import make_dataclass, dataobject
 
 # Matches  key="quoted value"  OR  key=bare_value  (no commas/spaces in value)
 _KV_RE = re.compile(
-    r'(\w+)\s*=\s*(?:"([^"]*)"|([^\s,"]+))',
+    r'(\w+)\s*=\s*(?:"([^"]*)"|(.+?))(?=\s*\w+\s*=\s*|$)',
     re.IGNORECASE,
 )
 
@@ -51,7 +51,7 @@ def _extract_cell(d: dict) -> Optional[np.ndarray]:
     triclinic) or 3 floats (orthogonal diagonal).  Returns ``None`` when
     neither key is present or the value cannot be parsed.
     """
-    for key in ('lattice', 'cell'):
+    for key in ('lattice', 'Lattice', 'cell', 'Cell'):
         raw = d.get(key)
         if raw is None:
             continue
@@ -60,6 +60,18 @@ def _extract_cell(d: dict) -> Optional[np.ndarray]:
             return np.array(vals, dtype=float).reshape(3, 3)
         if len(vals) == 3:
             return np.diag(np.array(vals, dtype=float))
+
+    # Try extracting from 'properties' value (e.g. "Properties = ..., Cell: [[...]]")
+    props = d.get('properties')
+    if props:
+        m = re.search(r'(?:Cell|Lattice):\s*([^,]+)', props)
+        if m:
+            val_str = m.group(1).strip()
+            vals = re.findall(r"[-+]?\d*\.\d+|\d+", val_str)
+            if len(vals) == 9:
+                return np.array(vals, dtype=float).reshape(3, 3)
+            if len(vals) == 3:
+                return np.diag(np.array(vals, dtype=float))
     return None
 
 
