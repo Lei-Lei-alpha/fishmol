@@ -54,9 +54,11 @@ def _extract_cell(d: dict, line: str) -> Optional[np.ndarray]:
     Includes a fallback search on the raw comment line to handle CP2K-style
     nested brackets and comma-separated values that break standard KV parsing.
     """
+    # Regex for floats including scientific notation
     float_re = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
 
     # 1. Dictionary Lookup (ASE / OVITO style)
+    # We check the dict first for standard Lattice=" " entries.
     for key in ('lattice', 'cell'):
         raw = d.get(key)
         if raw:
@@ -67,10 +69,13 @@ def _extract_cell(d: dict, line: str) -> Optional[np.ndarray]:
                 return np.diag(np.array(vals, dtype=float))
 
     # 2. Raw Line Fallback (CP2K style: "Cell: [[...]]")
-    m = re.search(r'(?:Cell|Lattice):\s*([\[\s\d.,eE+-]+)', line, re.IGNORECASE)
+    # We look for the keyword and capture everything until the next potential 
+    # key-value pair or the end of the line, including brackets.
+    m = re.search(r'(?:Cell|Lattice)[:=]\s*([\[\s\d.,eE+-\]]+)', line, re.IGNORECASE)
     if m:
         vals = re.findall(float_re, m.group(1))
         if len(vals) >= 9:
+            # For CP2K, we take the first 9 floats found after the 'Cell' keyword.
             return np.array(vals[:9], dtype=float).reshape(3, 3)
         if len(vals) >= 3:
             return np.diag(np.array(vals[:3], dtype=float))
@@ -122,10 +127,54 @@ def read_extxyz(
     timestep: float = 1.0,
     cell: Any = None,
 ) -> Tuple[int, int, list, float]:
-    """Read an extended XYZ trajectory file (see module docstring for details)."""
+    """Read an extended XYZ trajectory file.
+
+    Per-frame ``Lattice=`` (or ``cell=``) fields in the comment line are
+    parsed and attached to each returned :class:`~fishmol.atoms.Atoms` frame,
+    enabling NPT trajectories where the simulation cell evolves over time.
+
+    When a frame carries no cell information in its comment line the *cell*
+    fallback argument is used.  If *cell* is also ``None`` the frame's
+    ``.cell.lattice`` attribute will be ``None`` — geometry methods that rely
+    on periodic boundary conditions (MIC distances, wrapping) will raise in
+    that case.
+
+    Parameters
+    ----------
+    path : str
+        Path to the ``.xyz`` / ``.extxyz`` file.
+    index : str, int, or slice
+        Frame selection:
+
+        * ``':'`` or ``'all'`` — every frame in the file.
+        * Integer *n* — single frame (negative indices count from the end).
+        * ``slice(start, stop, step)`` — a strided sub-range.
+
+    timestep : float
+        Nominal time step between consecutive frames in **fs**.  When a slice
+        step *k* is used the returned effective timestep is ``timestep * k``.
+    cell : array-like of shape (3, 3) or None
+        Fallback cell (lattice vectors as rows, in Å) used for frames that
+        carry no ``Lattice=`` field.  Pass an explicit value for NVT
+        trajectories produced by codes that omit cell data from each frame
+        (e.g. CP2K ``FORMAT XYZ``).  Ignored when the file already contains
+        per-frame cell information.
+
+    Returns
+    -------
+    natoms : int
+        Number of atoms per frame (must be constant throughout the file).
+    nframes : int
+        Total number of frames present in the file, **before** slicing.
+    frames : list of :class:`~fishmol.atoms.Atoms`
+        Selected frames with per-frame cells attached.
+    effective_timestep : float
+        Adjusted time step ``timestep * slice_step`` in fs.
+    """
     from fishmol.atoms import Atoms
     dc_cell = make_dataclass("Cell", "lattice")
 
+    # ── 1. Memory-map the file ────────────────────────────────────────────────
     with open(path, 'rb') as fh:
         mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
         raw = [line.decode('utf-8', errors='replace').rstrip('\r\n') for line in iter(mm.readline, b'')]
@@ -133,6 +182,7 @@ def read_extxyz(
 
     if not raw: raise ValueError(f"File {path!r} is empty.")
 
+    # ── 2. Detect natoms and total frame count ────────────────────────────────
     try:
         natoms = int(raw[0].strip())
     except ValueError:
@@ -141,7 +191,7 @@ def read_extxyz(
     block = natoms + 2
     nframes = sum(1 for i in range(0, len(raw), block) if raw[i].strip().lstrip('-').isdigit())
 
-    # Resolve index
+    # ── 3. Resolve index → ordered list of frame numbers ─────────────────────
     if index in (':', 'all'): frame_ids = list(range(nframes))
     elif isinstance(index, int):
         n = index if index >= 0 else nframes + index
@@ -150,37 +200,55 @@ def read_extxyz(
         frame_ids = list(range(index.start or 0, index.stop or nframes, index.step or 1))
     else: frame_ids = list(index)
 
-    effective_timestep = timestep * (index.step if isinstance(index, slice) and index.step else 1)
+    step = index.step if isinstance(index, slice) and index.step else 1
+    effective_timestep = timestep * step
+
+    # ── 4. Fallback cell ──────────────────────────────────────────────────────
     _fallback = dc_cell(np.asarray(cell, dtype=float)) if cell is not None else None
 
+    # ── 5. Detect column layout from the first frame comment ─────────────────
     sym_col, pos_slice = _col_indices(raw[1] if len(raw) > 1 else '')
 
+    # ── 6. Parse each selected frame ─────────────────────────────────────────
     frames: List[Atoms] = []
     for fi in frame_ids:
         base = fi * block
         if base + 1 >= len(raw): break
         comment = raw[base + 1]
         
-        # Extract cell using enhanced logic
+        # Cell: prefer per-frame Lattice=, then fallback, then None
         cell_dict = _parse_comment(comment)
         cell_arr = _extract_cell(cell_dict, comment)
         
-        frame_cell = dc_cell(cell_arr) if cell_arr is not None else (_fallback or dc_cell(None))
+        if cell_arr is not None:
+            frame_cell = dc_cell(cell_arr)
+        elif _fallback is not None:
+            frame_cell = _fallback
+        else:
+            frame_cell = dc_cell(None)
 
+        # Atom symbols and Cartesian positions
         atom_lines = raw[base + 2: base + 2 + natoms]
-        symbs, positions = [], []
+        symbs: List[str] = []
+        positions: List[List[float]] = []
         for ln in atom_lines:
             cols = ln.split()
             symbs.append(cols[sym_col])
             positions.append([float(v) for v in cols[pos_slice]])
 
-        frames.append(Atoms(symbs=np.array(symbs, dtype='<U2'), pos=np.array(positions, dtype=float), cell=frame_cell))
+        frames.append(
+            Atoms(
+                symbs=np.array(symbs, dtype='<U2'),
+                pos=np.array(positions, dtype=float),
+                cell=frame_cell,
+            )
+        )
 
     return natoms, nframes, frames, effective_timestep
 
 
 def write_extxyz(frames: list, filename: str, natoms: int, timestep: float) -> None:
-    """Write a list of Atoms frames to extended XYZ."""
+    """Write a list of :class:`~fishmol.atoms.Atoms` frames to extended XYZ."""
     if os.path.exists(filename):
         base, ext = os.path.splitext(filename)
         counter = 1
@@ -194,54 +262,19 @@ def write_extxyz(frames: list, filename: str, natoms: int, timestep: float) -> N
     with open(filename, 'w', encoding='utf-8') as fh:
         for i, frame in enumerate(frames):
             lattice_str = None
-            if frame.cell and getattr(frame.cell, 'lattice', None) is not None:
-                lat = np.asarray(frame.cell.lattice)
-                if lat.shape == (3, 3):
-                    lattice_str = ' '.join(f'{v:.8f}' for v in lat.flatten())
+            fc = frame.cell
+            if fc is not None:
+                lat = getattr(fc, 'lattice', None)
+                if lat is not None:
+                    lat = np.asarray(lat)
+                    if lat.shape == (3, 3):
+                        lattice_str = ' '.join(f'{v:.8f}' for v in lat.flatten())
 
             fh.write(f"{natoms}\n")
             comment = f'Properties=species:S:1:pos:R:3 frame={i} time={i * timestep:.3f} fs'
-            if lattice_str: comment = f'Lattice="{lattice_str}" ' + comment
+            if lattice_str is not None:
+                comment = f'Lattice="{lattice_str}" ' + comment
             fh.write(comment + '\n')
 
             for sym, (x, y, z) in zip(frame.symbs, frame.pos):
                 fh.write(f"{sym:<3s} {x:>18.8f} {y:>18.8f} {z:>18.8f}\n")
-
-
-def _lammps_cell(box_header: str, bound_lines: List[str]) -> Tuple[np.ndarray, np.ndarray]:
-    """Parse an ``ITEM: BOX BOUNDS`` block into a cell matrix and origin."""
-    triclinic = 'xy' in box_header
-    vals = [list(map(float, ln.split())) for ln in bound_lines]
-    if triclinic:
-        xlo_b, xhi_b, xy = vals[0][0], vals[0][1], vals[0][2]
-        ylo_b, yhi_b, xz = vals[1][0], vals[1][1], vals[1][2]
-        zlo_b, zhi_b, yz = vals[2][0], vals[2][1], vals[2][2]
-        xlo, xhi = xlo_b - min(0.0, xy, xz, xy + xz), xhi_b - max(0.0, xy, xz, xy + xz)
-        ylo, yhi = ylo_b - min(0.0, yz), yhi_b - max(0.0, yz)
-        zlo, zhi = zlo_b, zhi_b
-        cell = np.array([[xhi-xlo, 0, 0], [xy, yhi-ylo, 0], [xz, yz, zhi-zlo]])
-    else:
-        xlo, xhi = vals[0][0], vals[0][1]
-        ylo, yhi = vals[1][0], vals[1][1]
-        zlo, zhi = vals[2][0], vals[2][1]
-        cell = np.diag([xhi - xlo, yhi - ylo, zhi - zlo])
-    return cell.astype(float), np.array([xlo, ylo, zlo], dtype=float)
-
-
-def read_lammpstrj(path: str, index: Union[str, slice, int] = ':', timestep: float = 1.0, cell: Any = None, type_map: Optional[dict] = None, sort_by_id: bool = True) -> Tuple[int, int, list, float]:
-    """Read a LAMMPS dump trajectory file (see module docstring for details)."""
-    from fishmol.atoms import Atoms
-    dc_cell = make_dataclass("Cell", "lattice")
-    with open(path, 'rb') as fh:
-        mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
-        raw = [line.decode('utf-8', errors='replace').rstrip('\r\n') for line in iter(mm.readline, b'')]
-        mm.close()
-    
-    frame_starts = [i for i, ln in enumerate(raw) if ln.strip().startswith("ITEM: TIMESTEP")]
-    if not frame_starts: raise ValueError(f"No LAMMPS frames found in {path!r}.")
-    
-    nframes = len(frame_starts)
-    natoms = int(raw[frame_starts[0] + 3].strip())
-    # Slicing logic would go here (omitted for brevity in this snippet)
-    # ...
-    return natoms, nframes, [], timestep # Placeholder for full implementation
