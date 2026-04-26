@@ -9,6 +9,7 @@ NPT (variable cell) trajectories transparent to callers: each
 
 import numpy as np
 import warnings
+import os
 from typing import Any, List, Optional, Sequence, Tuple, Union
 
 from fishmol.atoms import Atoms
@@ -23,9 +24,10 @@ class Trajectory:
     timestep : float
         Nominal time step between consecutive stored frames in **fs**.
     data : str, optional
-        Path to an extended XYZ trajectory file.  When supplied the file is
-        read immediately; *natoms*, *nframes*, and *frames* are derived from
-        it and must not be passed as well.
+        Path to an extended XYZ trajectory file, a LAMMPS .lammpstrj file, 
+        or a directory containing a simulation (CP2K or LAMMPS).
+        When supplied the file or directory is read immediately; *natoms*, 
+        *nframes*, and *frames* are derived from it and must not be passed as well.
     natoms : int, optional
         Number of atoms per frame — required when *data* is not given.
     nframes : int, optional
@@ -41,6 +43,12 @@ class Trajectory:
         NVT output from CP2K ``FORMAT XYZ``.  When the file **does** contain
         ``Lattice=`` in every frame (NPT output) this argument can be omitted
         entirely; the per-frame cell is read automatically.
+    cell_path : str, optional
+        Explicit path to a .cell file (for CP2K folders).
+    frc_path : str, optional
+        Explicit path to a force file (e.g., frc-1.xyz).
+    vel_path : str, optional
+        Explicit path to a velocity file (e.g., vel-1.xyz).
 
     Attributes
     ----------
@@ -61,34 +69,45 @@ class Trajectory:
     >>> traj = Trajectory(timestep=5, data="npt.xyz")
     >>> traj.frames[0].cell.lattice   # first-frame cell (3,3) array
     >>> traj.frames[-1].cell.lattice  # last-frame cell (different for NPT)
+    
+    Folder — automatically discover CP2K or LAMMPS output:
+    
+    >>> traj = Trajectory(data="test_data")  # CP2K folder
+    >>> traj = Trajectory(data="test_lammps") # LAMMPS folder
     """
 
     def __init__(
         self,
-        timestep: float,
         data: Optional[str] = None,
         natoms: Optional[int] = None,
         nframes: Optional[int] = None,
         frames: Optional[List[Atoms]] = None,
         index: Optional[Union[int, slice, str]] = None,
+        timestep: Optional[float] = None,
         cell: Any = None,
+        cell_path: Optional[str] = None,
+        frc_path: Optional[str] = None,
+        vel_path: Optional[str] = None,
     ) -> None:
-        self.timestep = timestep
+        self.timestep = timestep if timestep is not None else 5.0
         self.data = data
         self.index = index if index is not None else ':'
-        self._cell_fallback = cell   # explicit cell provided by caller
+        self._cell_fallback = cell
 
         if self.data is not None:
-            self.natoms, self.nframes, self.frames, self.timestep = _io.read_extxyz(
+            # Use the flexible reader that handles files and directories
+            self.natoms, self.nframes, self.frames = _io.read_trajectory_files(
                 path=self.data,
                 index=self.index,
                 timestep=self.timestep,
-                cell=cell,
+                cell_path=cell_path,
+                frc_path=frc_path,
+                vel_path=vel_path,
             )
         else:
             self.natoms = natoms
             self.nframes = nframes
-            self.frames = frames
+            self.frames = frames if frames is not None else []
 
     # ── cell convenience property ─────────────────────────────────────────────
 
@@ -153,7 +172,8 @@ class Trajectory:
             stop = n.stop if n.stop is not None else self.nframes
             step = n.step or 1
             frames = [self.frames[x] for x in range(start, stop, step)]
-            new_timestep = self.timestep * step
+            if self.timestep:
+                new_timestep = self.timestep * step
 
         else:
             raise TypeError(f"Invalid index type: {type(n).__name__!r}.")
@@ -209,16 +229,17 @@ class Trajectory:
             with ``_calibrated`` appended before the extension.
 
         Returns
-        -------
+-------
         self
             Returns ``self`` to allow method chaining.
         """
+        if not self.frames: return self
         com_0 = self.frames[0].calc_com()
 
         if save:
-            if filename is None and self.data is not None:
-                base, ext = self.data.rsplit('.', 1)
-                filename = f"{base}_calibrated.{ext}"
+            if filename is None and self.data is not None and not os.path.isdir(self.data):
+                base, ext = os.path.splitext(self.data)
+                filename = f"{base}_calibrated.xyz"
             elif filename is None:
                 filename = "trajectory_calibrated.xyz"
 
@@ -226,12 +247,7 @@ class Trajectory:
                 shift = com_0 - frame.calc_com()
                 frame.pos = frame.pos + shift
 
-            _io.write_extxyz(
-                frames=self.frames,
-                filename=filename,
-                natoms=self.natoms,
-                timestep=self.timestep,
-            )
+            self.write(filename=filename)
             print(f"Calibrated trajectory written to {filename!r}")
         else:
             for frame in self:
