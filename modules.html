@@ -1,0 +1,1429 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>FishMol — Module Reference &#8212; Fishmol Doc</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'modules';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="intro.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/fishmol_logo.png" class="logo__image only-light" alt="Fishmol Doc - Home"/>
+    <img src="_static/fishmol_logo.png" class="logo__image only-dark pst-js-only" alt="Fishmol Doc - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="intro.html">
+                    FishMol Documentation
+                </a>
+            </li>
+        </ul>
+        <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="trajectory_IO.html">I/O of Molecular Dynamics Trajectories</a></li>
+<li class="toctree-l1"><a class="reference internal" href="MSD_diff_coeff.html">Mean Square Displacement and Diffusion Coefficient</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diff_aniso.html">Diffusion Anisotropy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="H_bond.html">Hydrogen Bond Recognition and Lifetime Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VRD.html">Vector Reorientation Dynamics (VRD)</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Lei-Lei-alpha/fishmol" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Lei-Lei-alpha/fishmol/issues/new?title=Issue%20on%20page%20%2Fmodules.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/modules.ipynb" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.ipynb</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>FishMol — Module Reference</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#verify-installation">Verify installation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#imports">Imports</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trajectory-i-o">1. Trajectory I/O</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#theory">Theory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#load-a-trajectory">Load a trajectory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#index-and-slice">Index and slice</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#centre-of-mass-drift-correction-and-periodic-wrapping">Centre-of-mass drift correction and periodic wrapping</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualise-a-frame-requires-ase">Visualise a frame (requires ASE)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#write-a-trajectory">Write a trajectory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#build-atom-index-groups-from-element-symbols">Build atom-index groups from element symbols</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-frame-geometry-distances-angles-dihedrals">Per-frame geometry: distances, angles, dihedrals</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#molecule-recognition">Molecule recognition</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#radial-distribution-function-rdf">2. Radial Distribution Function (RDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#angular-distribution-function-adf">3. Angular Distribution Function (ADF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dihedral-distribution-function-ddf">4. Dihedral Distribution Function (DDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#combined-distribution-function-cdf">5. Combined Distribution Function (CDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scalar-distribution-function-sdf">6. Scalar Distribution Function (SDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-reorientation-dynamics-vrd">7. Vector Reorientation Dynamics (VRD)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#van-hove-correlation-function-vhcf">8. Van Hove Correlation Function (VHCF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">Theory</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#self-part-i-j">Self part (<span class="math notranslate nohighlight">\(i=j\)</span>)</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#distinct-part-i-ne-j">Distinct part (<span class="math notranslate nohighlight">\(i\ne j\)</span>)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dimer-analysis">9. Dimer Analysis</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">Theory</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#dimer-lifetime-displacement-distribution-function-dlddf">Dimer Lifetime-Displacement Distribution Function (DLDDF)</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dimers-detect-dimer-pairs-in-each-frame"><code class="docutils literal notranslate"><span class="pre">dimers</span></code>: detect dimer pairs in each frame</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dlddf-lifetime-displacement-2-d-histogram"><code class="docutils literal notranslate"><span class="pre">DLDDF</span></code>: lifetime-displacement 2-D histogram</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#h-bond-lifetime-from-autocorrelation">10. H-bond Lifetime from Autocorrelation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">Theory</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="fishmol-module-reference">
+<h1>FishMol — Module Reference<a class="headerlink" href="#fishmol-module-reference" title="Link to this heading">#</a></h1>
+<p>A self-contained reference notebook for every analysis module in <strong>FishMol</strong>.
+All classes and functions are imported directly from the installed package.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Section</p></th>
+<th class="head"><p>Module</p></th>
+<th class="head"><p>Class / Function</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Trajectory I/O</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">trj.Trajectory</span></code>, <code class="docutils literal notranslate"><span class="pre">sel_tools.cluster</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Radial Distribution Function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.RDF</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Angular Distribution Function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.ADF</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Dihedral Distribution Function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.DDF</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Combined Distribution Function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.CDF</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Scalar Distribution Function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.SDF</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Vector Reorientation Dynamics</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.VRD</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Van Hove Correlation Function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">funcs.VHCF</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Dimer Analysis</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dimer.dimers</span></code>, <code class="docutils literal notranslate"><span class="pre">dimer.DLDDF</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>H-bond Lifetime</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dimer.auto_cor</span></code>, <code class="docutils literal notranslate"><span class="pre">dimer.bi_exp_fit</span></code>, <code class="docutils literal notranslate"><span class="pre">dimer.calc_tau</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="verify-installation">
+<h2>Verify installation<a class="headerlink" href="#verify-installation" title="Link to this heading">#</a></h2>
+<p>Run the entry-point to confirm FishMol is installed correctly.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span>fishmol
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="imports">
+<h2>Imports<a class="headerlink" href="#imports" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fishmol</span><span class="w"> </span><span class="kn">import</span> <span class="n">trj</span><span class="p">,</span> <span class="n">funcs</span><span class="p">,</span> <span class="n">dimer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fishmol</span><span class="w"> </span><span class="kn">import</span> <span class="n">vis</span>                <span class="c1"># optional -- requires ASE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fishmol.sel_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cluster</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.ticker</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultipleLocator</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+    <span class="s2">&quot;font.size&quot;</span><span class="p">:</span> <span class="mi">11</span><span class="p">,</span>
+    <span class="s2">&quot;font.family&quot;</span><span class="p">:</span> <span class="s2">&quot;sans-serif&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;xtick.labelsize&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="s2">&quot;ytick.labelsize&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="s2">&quot;figure.figsize&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">4.2</span><span class="p">,</span> <span class="mf">3.6</span><span class="p">),</span>
+    <span class="s2">&quot;figure.subplot.left&quot;</span><span class="p">:</span> <span class="mf">0.21</span><span class="p">,</span>
+    <span class="s2">&quot;figure.subplot.right&quot;</span><span class="p">:</span> <span class="mf">0.96</span><span class="p">,</span>
+    <span class="s2">&quot;figure.subplot.bottom&quot;</span><span class="p">:</span> <span class="mf">0.18</span><span class="p">,</span>
+    <span class="s2">&quot;figure.subplot.top&quot;</span><span class="p">:</span> <span class="mf">0.93</span><span class="p">,</span>
+    <span class="s2">&quot;legend.frameon&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">})</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="trajectory-i-o">
+<h2>1. Trajectory I/O<a class="headerlink" href="#trajectory-i-o" title="Link to this heading">#</a></h2>
+<section id="theory">
+<h3>Theory<a class="headerlink" href="#theory" title="Link to this heading">#</a></h3>
+<p>FishMol reads <strong>extended XYZ</strong> files — the standard plain-text trajectory format produced by AIMD codes (CP2K, FHI-aims) and classical MD engines (LAMMPS, GROMACS via conversion tools).</p>
+<p>The simulation cell is described by three lattice vectors <span class="math notranslate nohighlight">\(\mathbf{a}_1, \mathbf{a}_2, \mathbf{a}_3\)</span> (passed as rows of a <span class="math notranslate nohighlight">\(3\times 3\)</span> matrix, in Angstrom).  For a triclinic cell:</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\mathbf{h} = \begin{pmatrix} a_{1x} &amp; a_{1y} &amp; a_{1z} \\
+a_{2x} &amp; a_{2y} &amp; a_{2z} \\
+a_{3x} &amp; a_{3y} &amp; a_{3z} \end{pmatrix}\end{split}\]</div>
+<p>Fractional coordinates <span class="math notranslate nohighlight">\(\mathbf{s}\)</span> and Cartesian positions <span class="math notranslate nohighlight">\(\mathbf{r}\)</span> are related by</p>
+<div class="math notranslate nohighlight">
+\[\mathbf{r} = \mathbf{s}\,\mathbf{h}, \qquad \mathbf{s} = \mathbf{r}\,\mathbf{h}^{-1}\]</div>
+<p>The <strong>minimum image convention (MIC)</strong> maps the fractional-coordinate separation to <span class="math notranslate nohighlight">\([-0.5, 0.5)\)</span> before converting back to Cartesian, so that all pairwise distances are measured to the nearest periodic image.  File reading uses <code class="docutils literal notranslate"><span class="pre">mmap</span></code> for fast memory-mapped I/O.</p>
+</section>
+<section id="load-a-trajectory">
+<h3>Load a trajectory<a class="headerlink" href="#load-a-trajectory" title="Link to this heading">#</a></h3>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Lattice vectors as rows (in Angstrom) -- edit to match your system</span>
+<span class="n">cell</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[</span><span class="mf">21.2944</span><span class="p">,</span>  <span class="mf">0.0000</span><span class="p">,</span>  <span class="mf">0.0000</span><span class="p">],</span>
+    <span class="p">[</span><span class="o">-</span><span class="mf">4.6030</span><span class="p">,</span> <span class="mf">20.7909</span><span class="p">,</span>  <span class="mf">0.0000</span><span class="p">],</span>
+    <span class="p">[</span><span class="o">-</span><span class="mf">0.9719</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2106</span><span class="p">,</span> <span class="mf">15.1054</span><span class="p">],</span>
+<span class="p">]</span>
+
+<span class="c1"># Load all frames (index=&#39;:&#39;), timestep 5 fs</span>
+<span class="n">traj</span> <span class="o">=</span> <span class="n">trj</span><span class="o">.</span><span class="n">Trajectory</span><span class="p">(</span><span class="n">timestep</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="s1">&#39;trajectory.xyz&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="n">cell</span><span class="o">=</span><span class="n">cell</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Frames : </span><span class="si">{</span><span class="n">traj</span><span class="o">.</span><span class="n">nframes</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Atoms  : </span><span class="si">{</span><span class="n">traj</span><span class="o">.</span><span class="n">natoms</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="index-and-slice">
+<h3>Index and slice<a class="headerlink" href="#index-and-slice" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Trajectory</span></code> supports Python-style indexing.  Slicing by step <span class="math notranslate nohighlight">\(k\)</span> automatically adjusts the effective timestep to <code class="docutils literal notranslate"><span class="pre">timestep</span> <span class="pre">*</span> <span class="pre">k</span></code>.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Single frame -&gt; 1-frame Trajectory</span>
+<span class="n">frame_0</span> <span class="o">=</span> <span class="n">traj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="c1"># Slice: every 10th frame between frame 100 and 500</span>
+<span class="n">sub</span> <span class="o">=</span> <span class="n">traj</span><span class="p">[</span><span class="mi">100</span><span class="p">:</span><span class="mi">500</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Sub-trajectory: </span><span class="si">{</span><span class="n">sub</span><span class="o">.</span><span class="n">nframes</span><span class="si">}</span><span class="s1"> frames, effective timestep </span><span class="si">{</span><span class="n">sub</span><span class="o">.</span><span class="n">timestep</span><span class="si">}</span><span class="s1"> fs&#39;</span><span class="p">)</span>
+
+<span class="c1"># Arbitrary list of frame indices</span>
+<span class="n">pick</span> <span class="o">=</span> <span class="n">traj</span><span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">150</span><span class="p">,</span> <span class="mi">200</span><span class="p">]]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Custom selection: </span><span class="si">{</span><span class="n">pick</span><span class="o">.</span><span class="n">nframes</span><span class="si">}</span><span class="s1"> frames&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="centre-of-mass-drift-correction-and-periodic-wrapping">
+<h3>Centre-of-mass drift correction and periodic wrapping<a class="headerlink" href="#centre-of-mass-drift-correction-and-periodic-wrapping" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">calib()</span></code> removes net CoM drift by shifting every frame so its CoM matches frame 0.  This is required before MSD or diffusion calculations.</p>
+<p><code class="docutils literal notranslate"><span class="pre">wrap2box()</span></code> folds all Cartesian positions into the primary unit cell (convert to fractional, apply mod 1, convert back).</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">traj</span><span class="o">.</span><span class="n">calib</span><span class="p">()</span>      <span class="c1"># remove CoM drift in-place; returns self for chaining</span>
+<span class="n">traj</span><span class="o">.</span><span class="n">wrap2box</span><span class="p">()</span>   <span class="c1"># wrap into [0, 1) fractional coordinates</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="visualise-a-frame-requires-ase">
+<h3>Visualise a frame (requires ASE)<a class="headerlink" href="#visualise-a-frame-requires-ase" title="Link to this heading">#</a></h3>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Interactive 3-D viewer embedded in Jupyter</span>
+<span class="n">vis</span><span class="o">.</span><span class="n">render_atoms</span><span class="p">(</span><span class="n">traj</span><span class="o">.</span><span class="n">frames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="write-a-trajectory">
+<h3>Write a trajectory<a class="headerlink" href="#write-a-trajectory" title="Link to this heading">#</a></h3>
+<p>Writes the trajectory (or any slice) back to extended XYZ.  FishMol appends a <code class="docutils literal notranslate"><span class="pre">-1</span></code> suffix if the target file already exists.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">traj</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s1">&#39;output.xyz&#39;</span><span class="p">)</span>
+
+<span class="c1"># Write every 5th frame of the first 1000 to a separate file</span>
+<span class="n">traj</span><span class="p">[:</span><span class="mi">1000</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s1">&#39;output_thin.xyz&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="build-atom-index-groups-from-element-symbols">
+<h3>Build atom-index groups from element symbols<a class="headerlink" href="#build-atom-index-groups-from-element-symbols" title="Link to this heading">#</a></h3>
+<p>Most analysis functions accept lists of atom indices.  Derive them from <code class="docutils literal notranslate"><span class="pre">frame.symbs</span></code> rather than hardcoding:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">symbs</span> <span class="o">=</span> <span class="n">traj</span><span class="o">.</span><span class="n">frames</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">symbs</span>   <span class="c1"># numpy array of element symbols</span>
+
+<span class="n">o_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">symbs</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="s1">&#39;O&#39;</span><span class="p">]</span>
+<span class="n">h_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">symbs</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="s1">&#39;H&#39;</span><span class="p">]</span>
+<span class="n">n_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">symbs</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="s1">&#39;N&#39;</span><span class="p">]</span>
+<span class="n">c_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">symbs</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="s1">&#39;C&#39;</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;O: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">o_idx</span><span class="p">)</span><span class="si">}</span><span class="s1">  H: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">h_idx</span><span class="p">)</span><span class="si">}</span><span class="s1">  N: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">n_idx</span><span class="p">)</span><span class="si">}</span><span class="s1">  C: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">c_idx</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="per-frame-geometry-distances-angles-dihedrals">
+<h3>Per-frame geometry: distances, angles, dihedrals<a class="headerlink" href="#per-frame-geometry-distances-angles-dihedrals" title="Link to this heading">#</a></h3>
+<p>Each <code class="docutils literal notranslate"><span class="pre">traj.frames[i]</span></code> is an <code class="docutils literal notranslate"><span class="pre">Atoms</span></code> object with <code class="docutils literal notranslate"><span class="pre">dist</span></code>, <code class="docutils literal notranslate"><span class="pre">angle</span></code>, <code class="docutils literal notranslate"><span class="pre">dihedral</span></code>, and <code class="docutils literal notranslate"><span class="pre">vec</span></code> methods, all accepting a <code class="docutils literal notranslate"><span class="pre">mic=True</span></code> flag for periodic systems.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">frame</span> <span class="o">=</span> <span class="n">traj</span><span class="o">.</span><span class="n">frames</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="c1"># D(A, B) under MIC</span>
+<span class="n">r01</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">dist</span><span class="p">(</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">o_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;r(O0, O1)             = </span><span class="si">{</span><span class="n">r01</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1"> A&#39;</span><span class="p">)</span>
+
+<span class="c1"># Bond angle: atoms i-j-k, vertex at j</span>
+<span class="n">theta</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">angle</span><span class="p">(</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">h_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">o_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;angle(O0-H0-O1)       = </span><span class="si">{</span><span class="n">theta</span><span class="si">:</span><span class="s1">.2f</span><span class="si">}</span><span class="s1"> deg&#39;</span><span class="p">)</span>
+
+<span class="c1"># Dihedral: atoms i-j-k-l</span>
+<span class="n">phi</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">dihedral</span><span class="p">(</span><span class="n">c_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">c_idx</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">c_idx</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;dihedral(C0-C1-C2-C3) = </span><span class="si">{</span><span class="n">phi</span><span class="si">:</span><span class="s1">.2f</span><span class="si">}</span><span class="s1"> deg&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="molecule-recognition">
+<h3>Molecule recognition<a class="headerlink" href="#molecule-recognition" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cluster()</span></code> builds a bond graph using covalent-radius thresholds (<span class="math notranslate nohighlight">\(r_{ij} &lt; 1.05(R_i + R_j)\)</span>) and finds connected components by iterative DFS.  Each returned <code class="docutils literal notranslate"><span class="pre">Molecule</span></code> has <code class="docutils literal notranslate"><span class="pre">.formula</span></code> (sorted Hill notation) and <code class="docutils literal notranslate"><span class="pre">.at_idx</span></code>.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">molecules</span> <span class="o">=</span> <span class="n">cluster</span><span class="p">(</span><span class="n">traj</span><span class="o">.</span><span class="n">frames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">molecules</span><span class="p">)</span><span class="si">}</span><span class="s1"> molecules&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;First molecule: </span><span class="si">{</span><span class="n">molecules</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">formula</span><span class="si">}</span><span class="s1">, indices: </span><span class="si">{</span><span class="n">molecules</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">at_idx</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">Counter</span>
+<span class="k">for</span> <span class="n">formula</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">Counter</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">formula</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">molecules</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  </span><span class="si">{</span><span class="n">formula</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="radial-distribution-function-rdf">
+<h2>2. Radial Distribution Function (RDF)<a class="headerlink" href="#radial-distribution-function-rdf" title="Link to this heading">#</a></h2>
+<section id="id1">
+<h3>Theory<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<p>The RDF <span class="math notranslate nohighlight">\(g_{AB}(r)\)</span> gives the probability of finding an atom of type <span class="math notranslate nohighlight">\(B\)</span> at distance <span class="math notranslate nohighlight">\(r\)</span> from a reference atom of type <span class="math notranslate nohighlight">\(A\)</span>, normalised by the uniform bulk density:</p>
+<div class="math notranslate nohighlight">
+\[g_{AB}(r) = \frac{\mathrm{count}(r,r+\Delta r)}
+{N_A\,N_B\,\dfrac{4\pi r^2\Delta r}{V}\,N_{\mathrm{frames}}}\]</div>
+<p>where <span class="math notranslate nohighlight">\(V = \det(\mathbf{h})\)</span> is the box volume.  The normalisation ensures <span class="math notranslate nohighlight">\(g_{AB}(r)\to 1\)</span> for large <span class="math notranslate nohighlight">\(r\)</span> in a homogeneous bulk.</p>
+<p><strong>Key quantities</strong></p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Observable</p></th>
+<th class="head"><p>How to extract</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Nearest-neighbour distance</p></td>
+<td><p>position of first peak</p></td>
+</tr>
+<tr class="row-odd"><td><p>Average coordination number</p></td>
+<td><p><span class="math notranslate nohighlight">\(\bar{n} = 4\pi\rho_B\int_0^{r_{\min}}r^2 g(r)\,dr\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p>Structural correlation length</p></td>
+<td><p><span class="math notranslate nohighlight">\(r\)</span> where <span class="math notranslate nohighlight">\(g(r)\)</span> decays to 1</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">rdf</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">RDF</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">at_g1</span><span class="o">=</span><span class="n">o_idx</span><span class="p">,</span>    <span class="c1"># reference group</span>
+    <span class="n">at_g2</span><span class="o">=</span><span class="n">h_idx</span><span class="p">,</span>    <span class="c1"># neighbour group</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+    <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">rdf_results</span> <span class="o">=</span> <span class="n">rdf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Combined panel: time-series of distances (left) + g(r) (right)</span>
+<span class="n">rdf_results</span> <span class="o">=</span> <span class="n">rdf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">com_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">r_peak</span> <span class="o">=</span> <span class="n">rdf_results</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">rdf_results</span><span class="o">.</span><span class="n">rdf</span><span class="o">.</span><span class="n">argmax</span><span class="p">()]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;First-peak position : </span><span class="si">{</span><span class="n">r_peak</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1"> A&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;First-peak height   : </span><span class="si">{</span><span class="n">rdf_results</span><span class="o">.</span><span class="n">rdf</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="angular-distribution-function-adf">
+<h2>3. Angular Distribution Function (ADF)<a class="headerlink" href="#angular-distribution-function-adf" title="Link to this heading">#</a></h2>
+<section id="id2">
+<h3>Theory<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
+<p>The ADF <span class="math notranslate nohighlight">\(g(\theta)\)</span> is the histogram of three-body angles <span class="math notranslate nohighlight">\(\theta_{A_1\!-\!A_2\!-\!A_3}\)</span> (vertex at <span class="math notranslate nohighlight">\(A_2\)</span>), normalised by the solid-angle element:</p>
+<div class="math notranslate nohighlight">
+\[g(\theta) = \frac{\mathrm{count}(\theta,\theta+\Delta\theta)}{N_{\mathrm{triplets}}\,\sin\theta\,\Delta\theta}\]</div>
+<p>The <span class="math notranslate nohighlight">\(\sin\theta\)</span> <strong>cone correction</strong> removes the geometric bias toward <span class="math notranslate nohighlight">\(90°\)</span>: the number of directions on a sphere between <span class="math notranslate nohighlight">\(\theta\)</span> and <span class="math notranslate nohighlight">\(\theta+d\theta\)</span> is <span class="math notranslate nohighlight">\(dN = 2\pi\sin\theta\,d\theta\)</span>, so an isotropic distribution would otherwise appear weighted toward <span class="math notranslate nohighlight">\(90°\)</span>.</p>
+<p><strong>Key features</strong></p>
+<ul class="simple">
+<li><p>Peaks identify preferred angles: <span class="math notranslate nohighlight">\(104.5°\)</span> (water), <span class="math notranslate nohighlight">\(109.5°\)</span> (tetrahedral), <span class="math notranslate nohighlight">\(120°\)</span> (planar)</p></li>
+<li><p>Broad peaks indicate flexibility; narrow peaks indicate rigid geometry</p></li>
+<li><p>Bimodal distributions signal coexisting conformations</p></li>
+</ul>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Angle A1-A2-A3 with vertex at A2</span>
+<span class="n">adf</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">ADF</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">at_g1</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span>    <span class="c1"># first atom</span>
+    <span class="n">at_g2</span><span class="o">=</span><span class="p">[</span><span class="n">h_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span>    <span class="c1"># vertex</span>
+    <span class="n">at_g3</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span>    <span class="c1"># third atom</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+    <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">180</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">adf_results</span> <span class="o">=</span> <span class="n">adf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">cone_correction</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Combined time-series + ADF panel</span>
+<span class="n">adf_results</span> <span class="o">=</span> <span class="n">adf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">cone_correction</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">com_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">theta_peak</span> <span class="o">=</span> <span class="n">adf_results</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">adf_results</span><span class="o">.</span><span class="n">adf</span><span class="o">.</span><span class="n">argmax</span><span class="p">()]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Most probable angle: </span><span class="si">{</span><span class="n">theta_peak</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> deg&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dihedral-distribution-function-ddf">
+<h2>4. Dihedral Distribution Function (DDF)<a class="headerlink" href="#dihedral-distribution-function-ddf" title="Link to this heading">#</a></h2>
+<section id="id3">
+<h3>Theory<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<p>The dihedral (torsion) angle <span class="math notranslate nohighlight">\(\phi\)</span> for a four-atom chain <span class="math notranslate nohighlight">\(A_1\)</span>-<span class="math notranslate nohighlight">\(A_2\)</span>-<span class="math notranslate nohighlight">\(A_3\)</span>-<span class="math notranslate nohighlight">\(A_4\)</span> is the angle between the <span class="math notranslate nohighlight">\(A_1\)</span>-<span class="math notranslate nohighlight">\(A_2\)</span>-<span class="math notranslate nohighlight">\(A_3\)</span> plane and the <span class="math notranslate nohighlight">\(A_2\)</span>-<span class="math notranslate nohighlight">\(A_3\)</span>-<span class="math notranslate nohighlight">\(A_4\)</span> plane:</p>
+<div class="math notranslate nohighlight">
+\[\phi = \operatorname{atan2}\!\bigl(|\mathbf{b}_2|\,\mathbf{b}_1\cdot(\mathbf{b}_2\times\mathbf{b}_3),\ (\mathbf{b}_1\times\mathbf{b}_2)\cdot(\mathbf{b}_2\times\mathbf{b}_3)\bigr), \quad \phi\in(-180^\circ,180^\circ]\]</div>
+<p>where <span class="math notranslate nohighlight">\(\mathbf{b}_i = \mathbf{r}_{i+1} - \mathbf{r}_i\)</span> are the bond vectors.</p>
+<p><strong>Key features</strong></p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\phi \approx \pm 60^\circ\)</span>: gauche; <span class="math notranslate nohighlight">\(\phi \approx 180^\circ\)</span>: trans</p></li>
+<li><p>Relative peak areas give rotamer population fractions</p></li>
+<li><p>Peak width is inversely related to the torsional barrier height</p></li>
+<li><p>A flat distribution indicates essentially free rotation</p></li>
+</ul>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># at_groups: list of [A1, A2, A3, A4] index lists, one per dihedral to track</span>
+<span class="n">dihedral_groups</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[</span><span class="n">c_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">c_idx</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">c_idx</span><span class="p">[</span><span class="mi">3</span><span class="p">]],</span>   <span class="c1"># C-C-C-C backbone dihedral</span>
+<span class="p">]</span>
+
+<span class="n">ddf</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">DDF</span><span class="p">(</span><span class="n">traj</span><span class="p">,</span> <span class="n">at_groups</span><span class="o">=</span><span class="n">dihedral_groups</span><span class="p">,</span> <span class="n">nbins</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">180</span><span class="p">,</span> <span class="mi">180</span><span class="p">))</span>
+<span class="n">ddf_results</span> <span class="o">=</span> <span class="n">ddf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Combined time-series + DDF panel</span>
+<span class="n">ddf_results</span> <span class="o">=</span> <span class="n">ddf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">com_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="combined-distribution-function-cdf">
+<h2>5. Combined Distribution Function (CDF)<a class="headerlink" href="#combined-distribution-function-cdf" title="Link to this heading">#</a></h2>
+<section id="id4">
+<h3>Theory<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
+<p>The CDF is the 2-D joint probability density of two structural observables <span class="math notranslate nohighlight">\(x_1\)</span> and <span class="math notranslate nohighlight">\(x_2\)</span> computed for the same atom group:</p>
+<div class="math notranslate nohighlight">
+\[\mathrm{CDF}(x_1, x_2) = P(x_1, x_2) \propto \sum_t \delta(x_1 - x_1^{(t)})\,\delta(x_2 - x_2^{(t)})\]</div>
+<p>The canonical application is the <span class="math notranslate nohighlight">\(r_{DA}\)</span>-<span class="math notranslate nohighlight">\(\angle DHA\)</span> CDF for hydrogen bonds, which reveals the joint geometry basin and separates true H-bonds (short <span class="math notranslate nohighlight">\(r_{DA}\)</span>, large <span class="math notranslate nohighlight">\(\angle DHA\)</span>) from weakly interacting contacts.</p>
+<p><strong>Key features</strong></p>
+<ul class="simple">
+<li><p>Elongated ridges indicate correlated variables</p></li>
+<li><p>Multiple density basins indicate coexisting structural motifs</p></li>
+<li><p>Marginal distributions recover the original 1-D RDF / ADF</p></li>
+</ul>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compute RDF and ADF for the same atom triplet</span>
+<span class="n">rdf_da</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">RDF</span><span class="p">(</span><span class="n">traj</span><span class="p">,</span> <span class="n">at_g1</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">at_g2</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span> <span class="n">nbins</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">))</span>
+<span class="n">adf_dha</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">ADF</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">at_g1</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">at_g2</span><span class="o">=</span><span class="p">[</span><span class="n">h_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">at_g3</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">180</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">rdf_res</span> <span class="o">=</span> <span class="n">rdf_da</span><span class="o">.</span><span class="n">calculate</span><span class="p">()</span>
+<span class="n">adf_res</span> <span class="o">=</span> <span class="n">adf_dha</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">cone_correction</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Construct the 2-D CDF</span>
+<span class="n">cdf</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">CDF</span><span class="p">(</span><span class="n">rdf_res</span><span class="p">,</span> <span class="n">adf_res</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="sa">r</span><span class="s1">&#39;$r_</span><span class="si">{OO}</span><span class="s1">$ (A)&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;$\angle OHO$ (deg)&#39;</span><span class="p">])</span>
+<span class="n">cdf_results</span> <span class="o">=</span> <span class="n">cdf</span><span class="o">.</span><span class="n">calculate</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="scalar-distribution-function-sdf">
+<h2>6. Scalar Distribution Function (SDF)<a class="headerlink" href="#scalar-distribution-function-sdf" title="Link to this heading">#</a></h2>
+<section id="id5">
+<h3>Theory<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<p>The SDF computes the normalised probability density <span class="math notranslate nohighlight">\(g(\delta)\)</span> for any pre-computed scalar observable <span class="math notranslate nohighlight">\(\delta\)</span> extracted from the trajectory:</p>
+<div class="math notranslate nohighlight">
+\[g(\delta) = \frac{\mathrm{count}(\delta,\delta+\Delta\delta)}{N\,\Delta\delta}\]</div>
+<p>where <span class="math notranslate nohighlight">\(N\)</span> is the total number of observations, so that <span class="math notranslate nohighlight">\(\int g(\delta)\,d\delta = 1\)</span>.</p>
+<p>Unlike the RDF or ADF (which compute the observable internally), the SDF accepts a <strong>pre-computed array</strong> – making it a general-purpose probability density estimator for any per-frame quantity: bond lengths, coordination numbers, order parameters, potential energies, etc.</p>
+<p><strong>Key features</strong></p>
+<ul class="simple">
+<li><p>Peak position: most probable value of <span class="math notranslate nohighlight">\(\delta\)</span></p></li>
+<li><p>Weighted mean: <span class="math notranslate nohighlight">\(\langle\delta\rangle = \int \delta\,g(\delta)\,d\delta\)</span></p></li>
+<li><p>FWHM: thermal fluctuation magnitude around the preferred value</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">com_plot=True</span></code>: time-series + distribution on a shared <span class="math notranslate nohighlight">\(\delta\)</span>-axis (useful for checking equilibration)</p></li>
+</ul>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pre-compute a scalar observable: O-O distance between two oxygens</span>
+<span class="n">oo_dists</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">frame</span><span class="o">.</span><span class="n">dist</span><span class="p">(</span><span class="n">o_idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">o_idx</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">traj</span><span class="o">.</span><span class="n">frames</span><span class="p">])</span>
+
+<span class="n">sdf</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">SDF</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">scaler</span><span class="o">=</span><span class="n">oo_dists</span><span class="p">,</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
+    <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">sdf_results</span> <span class="o">=</span> <span class="n">sdf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">x_label</span><span class="o">=</span><span class="sa">r</span><span class="s1">&#39;$r_</span><span class="si">{OO}</span><span class="s1">$ (A)&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Combined time-series + SDF panel</span>
+<span class="n">sdf_results</span> <span class="o">=</span> <span class="n">sdf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span>
+    <span class="n">com_plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">x_label</span><span class="o">=</span><span class="sa">r</span><span class="s1">&#39;$r_</span><span class="si">{OO}</span><span class="s1">$ (A)&#39;</span><span class="p">,</span>
+    <span class="n">y_label</span><span class="o">=</span><span class="sa">r</span><span class="s1">&#39;$g(r_</span><span class="si">{OO}</span><span class="s1">)$&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">peak</span> <span class="o">=</span> <span class="n">sdf_results</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">sdf_results</span><span class="o">.</span><span class="n">sdf</span><span class="o">.</span><span class="n">argmax</span><span class="p">()]</span>
+<span class="n">mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">sdf_results</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">sdf_results</span><span class="o">.</span><span class="n">sdf</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Peak position : </span><span class="si">{</span><span class="n">peak</span><span class="si">:</span><span class="s1">.4g</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Weighted mean : </span><span class="si">{</span><span class="n">mean</span><span class="si">:</span><span class="s1">.4g</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="vector-reorientation-dynamics-vrd">
+<h2>7. Vector Reorientation Dynamics (VRD)<a class="headerlink" href="#vector-reorientation-dynamics-vrd" title="Link to this heading">#</a></h2>
+<section id="id6">
+<h3>Theory<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
+<p>The VRD module computes the Legendre-polynomial autocorrelation of a normalised bond vector <span class="math notranslate nohighlight">\(\hat{\mathbf{u}}(t)\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[C_l(t) = \langle P_l[\hat{\mathbf{u}}(0)\cdot\hat{\mathbf{u}}(t)]\rangle\]</div>
+<p>The Legendre polynomials are</p>
+<div class="math notranslate nohighlight">
+\[P_1(x)=x,\qquad P_2(x)=\tfrac{1}{2}(3x^2-1),\qquad P_3(x)=\tfrac{1}{2}(5x^3-3x)\]</div>
+<p><span class="math notranslate nohighlight">\(C_1(t)\)</span> is related to infrared line shapes and NMR <span class="math notranslate nohighlight">\(T_1\)</span> relaxation.  <span class="math notranslate nohighlight">\(C_2(t)\)</span> is measured by depolarised Raman and dielectric spectroscopy.  Both decay from 1 to 0 as the vector loses orientational memory.</p>
+<p>The decay is fitted by the <strong>Kohlrausch-Williams-Watts (KWW) stretched exponential</strong>:</p>
+<div class="math notranslate nohighlight">
+\[C_l(t) = \exp\!\left[-\left(\frac{t}{\tau}\right)^\beta\right]\]</div>
+<p><span class="math notranslate nohighlight">\(\beta\in(0,1]\)</span> quantifies dynamical heterogeneity: <span class="math notranslate nohighlight">\(\beta=1\)</span> is single-exponential; <span class="math notranslate nohighlight">\(\beta&lt;1\)</span> indicates a distribution of relaxation times.  The effective reorientation time:</p>
+<div class="math notranslate nohighlight">
+\[\tau_{\mathrm{eff}} = \frac{\tau}{\beta}\,\Gamma\!\left(\frac{1}{\beta}\right)\]</div>
+<p><strong>Key features</strong></p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(C_2\)</span> decays more slowly than <span class="math notranslate nohighlight">\(C_1\)</span> (<span class="math notranslate nohighlight">\(\tau_2 \approx 3\tau_1\)</span> for isotropic diffusion)</p></li>
+<li><p>Plot <span class="math notranslate nohighlight">\(\ln C_l\)</span> vs <span class="math notranslate nohighlight">\(t\)</span> to distinguish exponential from stretched-exponential behaviour</p></li>
+<li><p>Comparing different <span class="math notranslate nohighlight">\(l\)</span> reveals the rotational diffusion mechanism</p></li>
+</ul>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># spec = [at_g1, at_g2] -- bond vector u = mean(pos(at_g2)) - pos(at_g1)</span>
+<span class="n">vrd</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">VRD</span><span class="p">(</span>
+    <span class="n">traj</span><span class="o">=</span><span class="n">traj</span><span class="p">,</span>
+    <span class="n">spec</span><span class="o">=</span><span class="p">[</span><span class="n">o_idx</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">h_idx</span><span class="p">[:</span><span class="mi">2</span><span class="p">]],</span>   <span class="c1"># O-H bond vector (first water molecule)</span>
+    <span class="n">sampling</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>                    <span class="c1"># use every 50th frame as t=0 origin</span>
+    <span class="n">l</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>                            <span class="c1"># Legendre order (1, 2, or 3)</span>
+    <span class="n">nframes</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>                    <span class="c1"># correlation window length (frames)</span>
+<span class="p">)</span>
+<span class="n">vrd_results</span> <span class="o">=</span> <span class="n">vrd</span><span class="o">.</span><span class="n">calculate</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># KWW parameters from the fit</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;tau      = </span><span class="si">{</span><span class="n">vrd_results</span><span class="o">.</span><span class="n">tau</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1"> ps&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;beta     = </span><span class="si">{</span><span class="n">vrd_results</span><span class="o">.</span><span class="n">beta</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;tau_eff  = </span><span class="si">{</span><span class="n">vrd_results</span><span class="o">.</span><span class="n">tau_eff</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1"> ps&#39;</span><span class="p">)</span>
+
+<span class="c1"># Log-scale plot to inspect the stretched-exponential shape</span>
+<span class="n">t_axis</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vrd_results</span><span class="o">.</span><span class="n">C_t</span><span class="p">))</span> <span class="o">*</span> <span class="n">traj</span><span class="o">.</span><span class="n">timestep</span> <span class="o">/</span> <span class="mi">1000</span>   <span class="c1"># ps</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_axis</span><span class="p">,</span> <span class="n">vrd_results</span><span class="o">.</span><span class="n">C_t</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">r</span><span class="s1">&#39;$C_2(t)$&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_axis</span><span class="p">,</span> <span class="n">vrd_results</span><span class="o">.</span><span class="n">C_t_fit</span><span class="p">,</span> <span class="s1">&#39;--&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;KWW fit&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$t$ (ps)&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$C_2(t)$&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="van-hove-correlation-function-vhcf">
+<h2>8. Van Hove Correlation Function (VHCF)<a class="headerlink" href="#van-hove-correlation-function-vhcf" title="Link to this heading">#</a></h2>
+<section id="id7">
+<h3>Theory<a class="headerlink" href="#id7" title="Link to this heading">#</a></h3>
+<p>The Van Hove function decomposes atomic motion into self (single-particle) and distinct (pair) parts:</p>
+<div class="math notranslate nohighlight">
+\[G(r,\tau) = G_s(r,\tau) + G_d(r,\tau)\]</div>
+<section id="self-part-i-j">
+<h4>Self part (<span class="math notranslate nohighlight">\(i=j\)</span>)<a class="headerlink" href="#self-part-i-j" title="Link to this heading">#</a></h4>
+<div class="math notranslate nohighlight">
+\[G_s(r,\tau) = \frac{1}{N}\sum_{i=1}^N\bigl\langle\delta\bigl(r - |\mathbf{r}_i(t+\tau) - \mathbf{r}_i(t)|\bigr)\bigr\rangle_t\]</div>
+<p>Short <span class="math notranslate nohighlight">\(\tau\)</span>: narrow Gaussian near <span class="math notranslate nohighlight">\(r=0\)</span> (caged motion).  Long <span class="math notranslate nohighlight">\(\tau\)</span>: broadening Gaussian (Fickian diffusion).  Deviations from Gaussianity are quantified by the <strong>non-Gaussian parameter</strong>:</p>
+<div class="math notranslate nohighlight">
+\[\alpha_2(\tau) = \frac{3\langle r^4(\tau)\rangle}{5\langle r^2(\tau)\rangle^2} - 1\]</div>
+<p><span class="math notranslate nohighlight">\(\alpha_2=0\)</span> for purely Gaussian dynamics; a peak at crossover time <span class="math notranslate nohighlight">\(\tau^*\)</span> signals dynamical heterogeneity and transient trapping.</p>
+</section>
+<section id="distinct-part-i-ne-j">
+<h4>Distinct part (<span class="math notranslate nohighlight">\(i\ne j\)</span>)<a class="headerlink" href="#distinct-part-i-ne-j" title="Link to this heading">#</a></h4>
+<div class="math notranslate nohighlight">
+\[G_d(r,\tau) = \frac{1}{N}\sum_{i\ne j}\bigl\langle\delta\bigl(r - |\mathbf{r}_j(t+\tau) - \mathbf{r}_i(t)|\bigr)\bigr\rangle_t\]</div>
+<p>At <span class="math notranslate nohighlight">\(\tau=0\)</span>: <span class="math notranslate nohighlight">\(G_d(r,0) = \rho\,g(r)\)</span> (recovers the RDF).  As <span class="math notranslate nohighlight">\(\tau\to\infty\)</span>: <span class="math notranslate nohighlight">\(G_d\to\rho\)</span> (loss of structural memory).</p>
+<blockquote>
+<div><p><strong>Important</strong>: the self-part requires <strong>unwrapped</strong> (continuous) coordinates.  Do <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">wrap2box()</span></code> before using <code class="docutils literal notranslate"><span class="pre">VHCF</span></code> in self mode.</p>
+</div></blockquote>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Self-part: load trajectory WITHOUT wrap2box()</span>
+<span class="n">traj_raw</span> <span class="o">=</span> <span class="n">trj</span><span class="o">.</span><span class="n">Trajectory</span><span class="p">(</span><span class="n">timestep</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="s1">&#39;trajectory.xyz&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="n">cell</span><span class="o">=</span><span class="n">cell</span><span class="p">)</span>
+<span class="n">traj_raw</span><span class="o">.</span><span class="n">calib</span><span class="p">()</span>   <span class="c1"># remove CoM drift only</span>
+
+<span class="n">vhcf_self</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">VHCF</span><span class="p">(</span>
+    <span class="n">traj_raw</span><span class="p">,</span>
+    <span class="n">at_g1</span><span class="o">=</span><span class="n">o_idx</span><span class="p">,</span>        <span class="c1"># atoms to track</span>
+    <span class="n">r_range</span><span class="o">=</span><span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span>
+    <span class="n">tau_sep</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>          <span class="c1"># spacing between time origins (frames)</span>
+    <span class="n">tau_max</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>         <span class="c1"># maximum tau (frames)</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">self_results</span> <span class="o">=</span> <span class="n">vhcf_self</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">vhcf_self</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Non-Gaussian parameter alpha_2(tau)</span>
+<span class="n">r2</span> <span class="o">=</span> <span class="n">self_results</span><span class="o">.</span><span class="n">mean_r2</span>   <span class="c1"># &lt;r^2(tau)&gt;</span>
+<span class="n">r4</span> <span class="o">=</span> <span class="n">self_results</span><span class="o">.</span><span class="n">mean_r4</span>   <span class="c1"># &lt;r^4(tau)&gt;</span>
+<span class="n">alpha2</span> <span class="o">=</span> <span class="mi">3</span><span class="o">*</span><span class="n">r4</span> <span class="o">/</span> <span class="p">(</span><span class="mi">5</span><span class="o">*</span><span class="n">r2</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="n">tau_ps</span> <span class="o">=</span> <span class="n">self_results</span><span class="o">.</span><span class="n">tau_axis</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">tau_ps</span><span class="p">,</span> <span class="n">alpha2</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;k&#39;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">ls</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$\tau$ (ps)&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$\alpha_2(\tau)$&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">&#39;Non-Gaussian parameter&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Distinct-part VHCF (supply at_g2; wrapped traj is fine)</span>
+<span class="n">vhcf_dist</span> <span class="o">=</span> <span class="n">funcs</span><span class="o">.</span><span class="n">VHCF</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">at_g1</span><span class="o">=</span><span class="n">o_idx</span><span class="p">,</span>
+    <span class="n">at_g2</span><span class="o">=</span><span class="n">h_idx</span><span class="p">,</span>     <span class="c1"># at_g2 != at_g1 activates the distinct mode</span>
+    <span class="n">r_range</span><span class="o">=</span><span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">],</span>
+    <span class="n">tau_sep</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">tau_max</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">dist_results</span> <span class="o">=</span> <span class="n">vhcf_dist</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dimer-analysis">
+<h2>9. Dimer Analysis<a class="headerlink" href="#dimer-analysis" title="Link to this heading">#</a></h2>
+<section id="id8">
+<h3>Theory<a class="headerlink" href="#id8" title="Link to this heading">#</a></h3>
+<p>A <em>dimer</em> is any pair of atoms (or molecular CoMs) satisfying geometry criteria in a given frame.  Three modes are supported:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mode</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">at_g1</span></code> format</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">criteria</span></code></p></th>
+<th class="head"><p>Use case</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Atom-atom distance</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[i,</span> <span class="pre">j,</span> <span class="pre">...]</span></code> flat ints</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[r_max,</span> <span class="pre">None]</span></code></p></td>
+<td><p>contact pairs</p></td>
+</tr>
+<tr class="row-odd"><td><p>CoM-CoM distance</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[[i,j,...],</span> <span class="pre">...]</span></code> lists</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[r_max,</span> <span class="pre">None]</span></code>, <code class="docutils literal notranslate"><span class="pre">com=True</span></code></p></td>
+<td><p>molecular pairs</p></td>
+</tr>
+<tr class="row-even"><td><p>H-bond (D-H-A)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[[D,</span> <span class="pre">[H1,H2,...]],</span> <span class="pre">...]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[r_DA_max,</span> <span class="pre">theta_min]</span></code></p></td>
+<td><p>H-bonds</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Distance criteria: float (Angstrom), <code class="docutils literal notranslate"><span class="pre">'1.02vdw_sum'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'1.1coval_sum'</span></code>.  Angle criteria: float (degrees) or flexible string <code class="docutils literal notranslate"><span class="pre">'120f'</span></code> that scales with instantaneous D-H bond length.</p>
+<section id="dimer-lifetime-displacement-distribution-function-dlddf">
+<h4>Dimer Lifetime-Displacement Distribution Function (DLDDF)<a class="headerlink" href="#dimer-lifetime-displacement-distribution-function-dlddf" title="Link to this heading">#</a></h4>
+<div class="math notranslate nohighlight">
+\[\mathrm{DLDDF}(\tau,\Delta r) = P(\text{lifetime}=\tau,\ |\Delta\mathbf{r}_{CoM}|=\Delta r)\]</div>
+<p><strong>Interpretation</strong>: short <span class="math notranslate nohighlight">\(\tau\)</span> + small <span class="math notranslate nohighlight">\(\Delta r\)</span> = thermal fluctuations; long <span class="math notranslate nohighlight">\(\tau\)</span> + small <span class="math notranslate nohighlight">\(\Delta r\)</span> = strongly bound / caged pairs; diagonal ridge = Brownian escape.</p>
+</section>
+</section>
+<section id="dimers-detect-dimer-pairs-in-each-frame">
+<h3><code class="docutils literal notranslate"><span class="pre">dimers</span></code>: detect dimer pairs in each frame<a class="headerlink" href="#dimers-detect-dimer-pairs-in-each-frame" title="Link to this heading">#</a></h3>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Build donor list: [[D_idx, [H1_idx, H2_idx]], ...]</span>
+<span class="c1"># Assumes water molecules: O at o_idx[i], H at h_idx[2i] and h_idx[2i+1]</span>
+<span class="n">n_waters</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">o_idx</span><span class="p">))</span>
+<span class="n">water_donors</span> <span class="o">=</span> <span class="p">[[</span><span class="n">o_idx</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">[</span><span class="n">h_idx</span><span class="p">[</span><span class="mi">2</span><span class="o">*</span><span class="n">i</span><span class="p">],</span> <span class="n">h_idx</span><span class="p">[</span><span class="mi">2</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]]]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_waters</span><span class="p">)]</span>
+<span class="n">water_acceptors</span> <span class="o">=</span> <span class="n">o_idx</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span>
+
+<span class="n">hb</span> <span class="o">=</span> <span class="n">dimer</span><span class="o">.</span><span class="n">dimers</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">at_g1</span><span class="o">=</span><span class="n">water_donors</span><span class="p">,</span>
+    <span class="n">at_g2</span><span class="o">=</span><span class="n">water_acceptors</span><span class="p">,</span>
+    <span class="n">criteria</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;1.02vdw_sum&#39;</span><span class="p">,</span> <span class="s1">&#39;120f&#39;</span><span class="p">],</span>
+<span class="p">)</span>
+<span class="n">hb</span><span class="o">.</span><span class="n">make_pairs</span><span class="p">()</span>
+<span class="n">hb</span><span class="o">.</span><span class="n">pair_filter</span><span class="p">(</span><span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s1">&#39;hbonds.json&#39;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Frame 0:&#39;</span><span class="p">,</span> <span class="n">hb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">dimers</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Number of H-bonds per frame</span>
+<span class="n">key</span> <span class="o">=</span> <span class="s1">&#39;pairs&#39;</span> <span class="k">if</span> <span class="s1">&#39;pairs&#39;</span> <span class="ow">in</span> <span class="n">hb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">dimers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="s1">&#39;d_h_a_pairs&#39;</span>
+<span class="n">nhb</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">hb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">dimers</span><span class="p">:</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="p">[]:</span>
+        <span class="n">nhb</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">p</span><span class="p">):</span>
+        <span class="n">nhb</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">nhb</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+
+<span class="n">t_hb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;frame&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">hb</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">dimers</span><span class="p">])</span> <span class="o">*</span> <span class="n">traj</span><span class="o">.</span><span class="n">timestep</span> <span class="o">/</span> <span class="mi">1000</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_hb</span><span class="p">,</span> <span class="n">nhb</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$t$ (ps)&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Number of H-bonds&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">xaxis</span><span class="o">.</span><span class="n">set_minor_locator</span><span class="p">(</span><span class="n">MultipleLocator</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="dlddf-lifetime-displacement-2-d-histogram">
+<h3><code class="docutils literal notranslate"><span class="pre">DLDDF</span></code>: lifetime-displacement 2-D histogram<a class="headerlink" href="#dlddf-lifetime-displacement-2-d-histogram" title="Link to this heading">#</a></h3>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dimer_settings</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;at_g1&#39;</span><span class="p">:</span> <span class="n">water_donors</span><span class="p">,</span>
+    <span class="s1">&#39;at_g2&#39;</span><span class="p">:</span> <span class="n">water_acceptors</span><span class="p">,</span>
+    <span class="s1">&#39;criteria&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;1.02vdw_sum&#39;</span><span class="p">,</span> <span class="s1">&#39;120f&#39;</span><span class="p">],</span>
+<span class="p">}</span>
+
+<span class="n">dlddf</span> <span class="o">=</span> <span class="n">dimer</span><span class="o">.</span><span class="n">DLDDF</span><span class="p">(</span>
+    <span class="n">traj</span><span class="p">,</span>
+    <span class="n">dimer_settings</span><span class="o">=</span><span class="n">dimer_settings</span><span class="p">,</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="nb">range</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">)]),</span>   <span class="c1"># [(tau_min,tau_max ps), (Dr_min,Dr_max A)]</span>
+<span class="p">)</span>
+<span class="n">dlddf</span><span class="o">.</span><span class="n">dimer_res</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s1">&#39;hbonds.json&#39;</span><span class="p">)</span>   <span class="c1"># reuses JSON written above</span>
+
+<span class="n">dlddf_results</span> <span class="o">=</span> <span class="n">dlddf</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span>
+    <span class="n">nframes</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+    <span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">xlims</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span>
+    <span class="n">ylims</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">],</span>
+    <span class="n">levels</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="h-bond-lifetime-from-autocorrelation">
+<h2>10. H-bond Lifetime from Autocorrelation<a class="headerlink" href="#h-bond-lifetime-from-autocorrelation" title="Link to this heading">#</a></h2>
+<section id="id9">
+<h3>Theory<a class="headerlink" href="#id9" title="Link to this heading">#</a></h3>
+<p>The <strong>continuous H-bond survival autocorrelation</strong> <span class="math notranslate nohighlight">\(C(t)\)</span> gives the probability that a bond present at <span class="math notranslate nohighlight">\(t=0\)</span> is still intact at time <span class="math notranslate nohighlight">\(t\)</span> (no intermittent breaking allowed):</p>
+<div class="math notranslate nohighlight">
+\[C(t) = \frac{\langle h(0)\,h(t)\rangle}{\langle h(0)^2\rangle}, \qquad C(0)=1, \quad C(t)\to 0\]</div>
+<p><span class="math notranslate nohighlight">\(C(t)\)</span> is averaged over non-overlapping windows of <span class="math notranslate nohighlight">\(n_{\mathrm{frames}}\)</span> frames.  The input is the JSON file produced by <code class="docutils literal notranslate"><span class="pre">dimers.pair_filter(filename=...)</span></code>.</p>
+<p>The decay is fitted with a <strong>biexponential model</strong>:</p>
+<div class="math notranslate nohighlight">
+\[C(t) = A\,e^{-t/\tau_1} + (1-A)\,e^{-t/\tau_2}\]</div>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\tau_1\)</span> (fast): librational / geminate-reformation dynamics</p></li>
+<li><p><span class="math notranslate nohighlight">\(\tau_2\)</span> (slow): structural H-bond breaking</p></li>
+</ul>
+<p>The <strong>effective lifetime</strong> is the area under <span class="math notranslate nohighlight">\(C(t)\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[\tau_{\mathrm{eff}} = \int_0^\infty C(t)\,dt = A\tau_1 + (1-A)\tau_2\]</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compute C(t) from the JSON written by pair_filter</span>
+<span class="n">t_ct</span><span class="p">,</span> <span class="n">C_mean</span><span class="p">,</span> <span class="n">C_err</span> <span class="o">=</span> <span class="n">dimer</span><span class="o">.</span><span class="n">auto_cor</span><span class="p">(</span>
+    <span class="n">data</span><span class="o">=</span><span class="s1">&#39;hbonds.json&#39;</span><span class="p">,</span>
+    <span class="n">nframes</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>              <span class="c1"># frames per averaging window</span>
+    <span class="n">skip</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>                  <span class="c1"># stride within each window</span>
+    <span class="n">index</span><span class="o">=</span><span class="s1">&#39;:&#39;</span><span class="p">,</span>                 <span class="c1"># use all frames</span>
+    <span class="n">timestep</span><span class="o">=</span><span class="n">traj</span><span class="o">.</span><span class="n">timestep</span><span class="p">,</span>    <span class="c1"># fs</span>
+<span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span><span class="n">t_ct</span><span class="p">,</span> <span class="n">C_mean</span><span class="p">,</span> <span class="n">yerr</span><span class="o">=</span><span class="n">C_err</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">capsize</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$t$ (ps)&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$C(t)$&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">&#39;H-bond survival autocorrelation&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Biexponential fit</span>
+<span class="n">t_fit</span><span class="p">,</span> <span class="n">C_fit</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="n">dimer</span><span class="o">.</span><span class="n">bi_exp_fit</span><span class="p">(</span>
+    <span class="n">t_ct</span><span class="p">,</span> <span class="n">C_mean</span><span class="p">,</span>
+    <span class="n">amp1</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">tau1</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">tau2</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>   <span class="c1"># initial guesses (ps)</span>
+<span class="p">)</span>
+<span class="n">A</span><span class="p">,</span> <span class="n">tau1</span><span class="p">,</span> <span class="n">tau2</span> <span class="o">=</span> <span class="n">params</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span><span class="n">t_ct</span><span class="p">,</span> <span class="n">C_mean</span><span class="p">,</span> <span class="n">yerr</span><span class="o">=</span><span class="n">C_err</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">capsize</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;data&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_fit</span><span class="p">,</span> <span class="n">C_fit</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;biexponential fit&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$t$ (ps)&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$C(t)$&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Effective H-bond lifetime: tau_eff = integral_0^inf C(t) dt = A*tau1 + (1-A)*tau2</span>
+<span class="n">tau_eff</span> <span class="o">=</span> <span class="n">dimer</span><span class="o">.</span><span class="n">calc_tau</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">tau1</span><span class="p">,</span> <span class="n">tau2</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Fitted parameters:&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  A       = </span><span class="si">{</span><span class="n">A</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  tau1    = </span><span class="si">{</span><span class="n">tau1</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1"> ps  (fast/librational)&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  tau2    = </span><span class="si">{</span><span class="n">tau2</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1"> ps  (slow/structural)&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  tau_eff = </span><span class="si">{</span><span class="n">tau_eff</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1"> ps&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./."
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#verify-installation">Verify installation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#imports">Imports</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trajectory-i-o">1. Trajectory I/O</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#theory">Theory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#load-a-trajectory">Load a trajectory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#index-and-slice">Index and slice</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#centre-of-mass-drift-correction-and-periodic-wrapping">Centre-of-mass drift correction and periodic wrapping</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualise-a-frame-requires-ase">Visualise a frame (requires ASE)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#write-a-trajectory">Write a trajectory</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#build-atom-index-groups-from-element-symbols">Build atom-index groups from element symbols</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-frame-geometry-distances-angles-dihedrals">Per-frame geometry: distances, angles, dihedrals</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#molecule-recognition">Molecule recognition</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#radial-distribution-function-rdf">2. Radial Distribution Function (RDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#angular-distribution-function-adf">3. Angular Distribution Function (ADF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dihedral-distribution-function-ddf">4. Dihedral Distribution Function (DDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#combined-distribution-function-cdf">5. Combined Distribution Function (CDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scalar-distribution-function-sdf">6. Scalar Distribution Function (SDF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-reorientation-dynamics-vrd">7. Vector Reorientation Dynamics (VRD)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">Theory</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#van-hove-correlation-function-vhcf">8. Van Hove Correlation Function (VHCF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">Theory</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#self-part-i-j">Self part (<span class="math notranslate nohighlight">\(i=j\)</span>)</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#distinct-part-i-ne-j">Distinct part (<span class="math notranslate nohighlight">\(i\ne j\)</span>)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dimer-analysis">9. Dimer Analysis</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">Theory</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#dimer-lifetime-displacement-distribution-function-dlddf">Dimer Lifetime-Displacement Distribution Function (DLDDF)</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dimers-detect-dimer-pairs-in-each-frame"><code class="docutils literal notranslate"><span class="pre">dimers</span></code>: detect dimer pairs in each frame</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dlddf-lifetime-displacement-2-d-histogram"><code class="docutils literal notranslate"><span class="pre">DLDDF</span></code>: lifetime-displacement 2-D histogram</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#h-bond-lifetime-from-autocorrelation">10. H-bond Lifetime from Autocorrelation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">Theory</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Lei Lei
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2023.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
