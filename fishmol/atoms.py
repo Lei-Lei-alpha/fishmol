@@ -5,13 +5,24 @@ from typing import Dict, List, Tuple, Union, Optional, Any, Sequence
 from fishmol.data import elements
 from fishmol.utils import make_comb, cart2xys, xys2cart, translate_pretty
 
+Cell = make_dataclass("Cell", 'lattice')
+
 class Atom(np.ndarray):
     """
-    Array representing atom symbol and coordinates in real space.
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Attributes
-    cell : the Cell object, the unit cell associated to the coordinates.
-    basis : {'Cartesian', 'Crystal'}, Describes whether the array contains crystal or cartesian coordinates.
+    Array representing a single atom symbol and its coordinates.
+
+    Parameters
+    ----------
+    symb : str
+        Chemical symbol of the atom.
+    pos : array-like
+        (3,) coordinates in Å or fractional units.
+    cell : Cell or array-like, optional
+        Unit cell associated with the coordinates.
+    basis : {'Cartesian', 'Crystal'}, optional
+        Coordinate system. Default: 'Cartesian'.
+    pbc : tuple of bool, optional
+        Periodic boundary conditions. Default: (True, True, True).
     """
     def __new__(cls, symb: str, pos: Union[List[float], np.ndarray], cell: Any = None, basis: str = 'Cartesian', pbc: Tuple[int, int, int] = (1,1,1)) -> 'Atom':
         dc_cell = make_dataclass("Cell", 'lattice')
@@ -21,7 +32,7 @@ class Atom(np.ndarray):
         dt = np.dtype([('symb', np.str_, 2), ('pos', np.float64, (3,))])
         obj = np.asarray([(symb, pos)], dtype=dt).view(cls)
         obj._symb = symb
-        obj._pos = pos
+        obj._pos = np.asarray(pos, dtype=float)
         obj._basis = basis
         obj._coord_names = coord_names(crys_names, cart_names)
         if isinstance(cell, dataobject):
@@ -32,150 +43,100 @@ class Atom(np.ndarray):
         return obj
 
     def __array_finalize__(self, obj: Any) -> None:
-        if obj is None:
-            return
+        if obj is None: return
         self._cell = getattr(obj, '_cell', None)
         self._basis = getattr(obj, '_basis', None)
-        self._pbc = getattr(obj, '_pbc', (0,0,0))
+        self._pbc = getattr(obj, '_pbc', (1,1,1))
 
     @property
-    def symb(self):
-        return self._symb
+    def symb(self): return self._symb
     @property
-    def pos(self):
-        return self._pos
+    def pos(self): return self._pos
     @property
-    def cell(self):
-        return self._cell
+    def cell(self): return self._cell
     @property
-    def basis(self):
-        return self._basis
+    def basis(self): return self._basis
     @property
-    def coord_names(self):
-        return self._coord_names
+    def coord_names(self): return self._coord_names
     @property
-    def pbc(self):
-        return self._pbc
+    def pbc(self): return self._pbc
 
     def to_cart(self) -> 'Atom':
-        """
-        Converts the coordinates to Cartesian and return a new Atom object.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Atom, new Atom object ensured to have basis='Cartesian'.
-        """
+        """Ensure the atom coordinates are in Cartesian (Å) basis."""
         if self.basis in self.coord_names.cart_names:
             return self
-        else:
-            pos = xys2cart(self.pos, self.cell)
-            return Atom(symb = self.symb, pos=pos, cell=self.cell, basis=self.coord_names.cart_names[0], pbc = self.pbc)
+        pos = xys2cart(self.pos, self.cell)
+        return Atom(symb=self.symb, pos=pos, cell=self.cell, basis='Cartesian', pbc=self.pbc)
 
     def to_crys(self) -> 'Atom':
-        """
-        Converts the coordinates to Crystal and return a new Atom object.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Atom, new Atom object ensured to have basis='Crystal'.
-        """
+        """Ensure the atom coordinates are in Crystal (fractional) basis."""
         if self.basis in self.coord_names.crys_names:
             return self
-        else:
-            pos = cart2xys(self.pos, self.cell)
-            return Atom(symb = self.symb, pos=pos, cell=self.cell, basis=self.coord_names.crys_names[0], pbc = self.pbc)
-
-    def to_basis(self, basis: str) -> 'Atom':
-        """
-        Converts the coordinates to the desired basis and return a new object.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        basis : {'Cartesian', 'Crystal'}, basis to which the coordinates are converted.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Atom, new Atom object ensured to have basis=basis.
-        """
-        
-        if basis in self.coord_names.crys_names:
-            return self.to_crys()
-        elif basis in self.coord_names.cart_names:
-            return self.to_cart()
-        else:
-            raise NameError("Trying to convert to an unknown basis")
+        pos = cart2xys(self.pos, self.cell)
+        return Atom(symb=self.symb, pos=pos, cell=self.cell, basis='Crystal', pbc=self.pbc)
 
     def vec(self, other: 'Atom', mic: bool = False) -> np.ndarray:
-        """
-        Calculate the vector connecting two Atom.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        other : Atom
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Atom, vector connecting self and other with the same basis as self.
-        """
-        if mic:
-            a2b = other.to_crys().pos - self.to_crys().pos
-            for i in range(3):
-                a2b[i] = a2b[i] - round(a2b[i])
-            if self.basis in self.coord_names.cart_names:
-                return xys2cart(a2b, self.cell)
-            else:
-                return a2b
-        else:
-            a2b = other.to_crys().pos - self.to_crys().pos
-            if self.basis in self.coord_names.cart_names:
-                return xys2cart(a2b, self.cell)
-            else:
-                return a2b
-            
-    def dist(self, other: 'Atom', mic: bool = False) -> float:
-        """
-        Calculate the distance between two Atom objects.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        other : Atom
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : float, the distance between self and other Atoms in angstrom.
-        """
+        """Calculate the vector connecting this atom to another."""
         if mic:
             a2b = other.to_crys().pos - self.to_crys().pos
             a2b -= np.round(a2b)
-            a2b = xys2cart(a2b, self.cell)
-            return np.sqrt(np.dot(a2b, a2b))
+            if self.basis in self.coord_names.cart_names:
+                return xys2cart(a2b, self.cell)
+            return a2b
         else:
-            a2b = other.to_cart().pos - self.to_cart().pos
-            return np.linalg.norm(a2b)
+            a2b = other.pos - self.pos
+            return a2b
+            
+    def dist(self, other: 'Atom', mic: bool = False) -> float:
+        """Calculate the distance to another atom in Å."""
+        v = self.vec(other, mic=mic)
+        if self.basis in self.coord_names.crys_names:
+            v = xys2cart(v, self.cell)
+        return np.linalg.norm(v)
+
 
 class Atoms(np.ndarray):
     """
-    Array representing coordinates in real space under periodic boundary conditions.
-    -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Attributes
-    cell : the Cell object, the unit cell associated to the coordinates.
-    basis : {'Cartesian', 'Crystal'}, Describes whether the array contains crystal or cartesian coordinates.
+    Array representing a collection of atoms and their properties.
+
+    The Atoms object stores symbols, positions, forces, and velocities in a 
+    structured array for efficient access. It handles coordinate basis 
+    conversions and Minimum Image Convention (MIC) calculations automatically.
     """
-    def __new__(cls, symbs: Union[List[str], str, np.ndarray], pos: Union[List[List[float]], np.ndarray], cell: Any = None, basis: str ='Cartesian', pbc: Tuple[int, int, int] = (1,1,1)) -> 'Atoms':
-        dt = np.dtype([('symbol', np.str_, 2), ('position', np.float64, (3,))])
+    def __new__(cls, symbs: Union[List[str], str, np.ndarray], pos: Union[List[List[float]], np.ndarray], cell: Any = None, basis: str ='Cartesian', pbc: Tuple[int, int, int] = (1,1,1), forces: Optional[np.ndarray] = None, velocities: Optional[np.ndarray] = None, energy: Optional[float] = None, timestamp: Optional[float] = None) -> 'Atoms':
+        dt = np.dtype([('symbol', np.str_, 2), ('position', np.float64, (3,)), ('force', np.float64, (3,)), ('velocity', np.float64, (3,))])
         dc_cell = make_dataclass("Cell", 'lattice')
         crys_names = ['Crystal', 'Crys', 'Cr', 'S']
         cart_names = ['Cartesian', 'Cart', 'Ca', 'R']
         coord_names = make_dataclass("Coord_names", 'crys_names cart_names')
-        if isinstance(symbs, list):
-            symbs = np.array(symbs, dtype = "<U2")
+        
         if isinstance(symbs, str):
+            # Parse chemical formula: e.g. "H2O" -> ["H", "H", "O"]
             a = []
             for i, letter in enumerate(symbs):
                 if letter.isdigit():
-                    if i == 0:
-                        raise Exception("Wrong format, a valid chemical formula should start with a chemical symbol!")
-                    else:
-                        a += [a[i-1] for n in range(int(letter)-1)]
+                    a += [a[-1]] * (int(letter) - 1)
                 else:
                     a += [letter]
-            symbs = np.array(a, dtype = "<U2")
+            symbs = a
+        
+        symbs = np.array(symbs, dtype = "<U2")
         pos =  np.array(pos, dtype = np.float64)
-        obj = np.asarray(list(zip(symbs, pos)), dtype=dt).view(cls)
+        n = len(symbs)
+        
+        data_list = np.zeros(n, dtype=dt)
+        data_list['symbol'] = symbs
+        data_list['position'] = pos
+        if forces is not None: data_list['force'] = forces
+        if velocities is not None: data_list['velocity'] = velocities
+            
+        obj = np.asarray(data_list, dtype=dt).view(cls)
         obj._symbs = symbs
         obj._pos = pos
+        obj._forces = forces
+        obj._velocities = velocities
+        obj._energy = energy
+        obj._timestamp = timestamp
         obj._basis = basis
         obj._coord_names = coord_names(crys_names, cart_names)
         if isinstance(cell, dataobject):
@@ -186,486 +147,240 @@ class Atoms(np.ndarray):
         return obj
 
     def __array_finalize__(self, obj: Any) -> None:
-        if obj is None:
-            return
+        if obj is None: return
         self._cell = getattr(obj, '_cell', None)
         self._basis = getattr(obj, '_basis', None)
-        self._pbc = getattr(obj, '_pbc', (0,0,0))
+        self._pbc = getattr(obj, '_pbc', (1,1,1))
 
     @property
-    def symbs(self):
-        return self._symbs
+    def symbs(self): return self._symbs
     @property
-    def pos(self):
-        return self._pos
-    @property
-    def cell(self):
-        return self._cell
-    @property
-    def basis(self):
-        return self._basis
-    @property
-    def coord_names(self):
-        return self._coord_names
-    @property
-    def pbc(self):
-        return self._pbc
-    @symbs.setter
-    def symbs(self, symb_lst):
-        self._symbs = symb_lst
+    def pos(self): return self._pos
     @pos.setter
-    def pos(self, pos_lst):
-        self._pos = pos_lst
+    def pos(self, val): self._pos = np.asarray(val)
+    @property
+    def forces(self): return self._forces
+    @forces.setter
+    def forces(self, value): self._forces = value
+    @property
+    def velocities(self): return self._velocities
+    @velocities.setter
+    def velocities(self, value): self._velocities = value
+    @property
+    def energy(self): return self._energy
+    @energy.setter
+    def energy(self, value): self._energy = value
+    @property
+    def timestamp(self): return self._timestamp
+    @timestamp.setter
+    def timestamp(self, value): self._timestamp = value
+    @property
+    def cell(self): return self._cell
     @cell.setter
-    def cell(self, cell_arr):
-        self._cell = cell_arr
+    def cell(self, val): self._cell = val
+    @property
+    def basis(self): return self._basis
+    @property
+    def coord_names(self): return self._coord_names
+    @property
+    def pbc(self): return self._pbc
         
     def __len__(self) -> int:
         return len(self.symbs)
     
-    def __getitem__(self, n: Union[int, str, Tuple, List, slice]) -> 'Atoms':
-        """
-        Enable slicing of Atoms object.
-        """
+    def __getitem__(self, n: Union[int, str, Tuple, List, slice]) -> Union['Atom', 'Atoms']:
         if isinstance(n, int):
-            if abs(n) >= len(self):
-                raise IndexError("The index (%d) is out of range."%n)
-            if n < 0:
-                n += len(self)
-            select = n
+            if abs(n) >= len(self): raise IndexError(f"Index {n} out of range.")
+            idx = n if n >= 0 else len(self) + n
+            return Atom(symb=self.symbs[idx], pos=self.pos[idx], cell=self.cell, basis=self.basis, pbc=self.pbc)
             
         elif isinstance(n, str):
             select = [x for x in range(len(self)) if self.symbs[x] == n]
-        
-        elif isinstance(n, tuple) or isinstance(n, list):
+        elif isinstance(n, (tuple, list)):
             if all(isinstance(x, str) for x in n):
                 select = [x for x in range(len(self)) if self.symbs[x] in n]
-
-            elif all(isinstance(x, int) for x in n):
+            elif all(isinstance(x, (int, np.integer)) for x in n):
                 select = n
             else:
-                raise Exception("Use only indices or only chemical symbols for iterables, mixed indices-chemical symbol selection is not enabled yet!")
-        
+                raise TypeError("Indices must be all int or all str.")
         elif isinstance(n, slice):
-            start = n.start
-            stop = n.stop
-            step = n.step
-            if start is None:
-                start = 0
-            if stop is None:
-                stop = len(self)
-            if step is None:
-                step = 1
-            select = list(range(start,stop,step))
-        
+            select = list(range(*n.indices(len(self))))
         else:
-            raise TypeError("Invalid argument type.")
+            raise TypeError("Invalid index type.")
         
-        return self.__class__(symbs = self.symbs[select], pos = self.pos[select], cell = self.cell, basis = self.basis, pbc = self.pbc)
-    
+        return self.__class__(symbs=self.symbs[select], pos=self.pos[select], cell=self.cell, basis=self.basis, pbc=self.pbc, 
+                             forces=self.forces[select] if self.forces is not None else None,
+                             velocities=self.velocities[select] if self.velocities is not None else None)
+
     def to_cart(self) -> 'Atoms':
-        """
-        Converts the coordinates to Cartesian and return a new Atoms object.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Atoms, new Atoms object ensured to have basis='Cartesian'.
-        """
-        if self.basis in self.coord_names.cart_names:
-            return self
-        else:
-            if self.cell is None:
-                print("Cell \U0001F35E not defined, cannot convert to absolute atom positions!")
-            else:
-                self.pos = xys2cart(self.pos, self.cell)
-                self._basis = self.coord_names.cart_names[0]
-            return self
+        """Ensure coordinates are in Cartesian (Å)."""
+        if self.basis in self.coord_names.cart_names: return self
+        new_pos = xys2cart(self.pos, self.cell)
+        return self.__class__(symbs=self.symbs, pos=new_pos, cell=self.cell, basis='Cartesian', pbc=self.pbc, forces=self.forces, velocities=self.velocities, energy=self.energy, timestamp=self.timestamp)
 
     def to_crys(self) -> 'Atoms':
-        """
-        Converts the coordinates to Crystal and return a new Atom object.
-        Returns
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        out : Atom, new Atom object ensured to have basis='Crystal'.
-        """
-        if self.basis in self.coord_names.crys_names:
-            return self
-        else:
-            if self.cell is None:
-                print("\U0001F35E Cell not defined, cannot convert to fractional atom positions!")
-            else:
-                self.pos = cart2xys(self.pos, self.cell)
-                self._basis = self.coord_names.crys_names[0]
-            return self
+        """Ensure coordinates are in Crystal (fractional)."""
+        if self.basis in self.coord_names.crys_names: return self
+        new_pos = cart2xys(self.pos, self.cell)
+        return self.__class__(symbs=self.symbs, pos=new_pos, cell=self.cell, basis='Crystal', pbc=self.pbc, forces=self.forces, velocities=self.velocities, energy=self.energy, timestamp=self.timestamp)
 
-    def to_basis(self, basis: str) -> 'Atoms':
-        """
-        Converts the coordinates to the desired basis and return a new object.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        basis : {'Cartesian', 'Crystal'}, basis to which the coordinates are converted.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Atom, new Atom object ensured to have basis=basis.
-        """
-        if basis in self.coord_names.crys_names:
-            return self.to_crys()
-        elif basis in self.coord_names.cart_names:
-            return self.to_cart()
-        else:
-            raise NameError("Trying to convert to an unknown basis")
+    def vec(self, a: int, b: int, mic: bool = False) -> np.ndarray:
+        """Vector connecting atom a to atom b."""
+        if mic:
+            diff = self.pos[b] - self.pos[a]
+            if self.basis in self.coord_names.cart_names:
+                diff = cart2xys(diff, self.cell)
+            diff -= np.round(diff)
+            if self.basis in self.coord_names.cart_names:
+                return xys2cart(diff, self.cell)
+            return diff
+        return self.pos[b] - self.pos[a]
 
-    def vec(self, a: int, b: int, normalise: bool = False, absolute: bool = True, mic: bool = False) -> np.ndarray:
-        """
-        Calculate the vector connecting two atoms in the Atoms object with indices m and n.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        a, b : int, indices of two atoms in the Atoms object. Required.
-        absolute : boolean, if true, calculates the absolute vector in angstrom, otherwise calculates the vector with fractional positions. Default: True. Optional.
-        normalise: boolean, if true, calculated the normalised vector, otherwise calculates the vector with a length equals to the distance between the two atoms m and n. Default: False. Optional.
-        mic: boolean, if true, wraps the atom within the cell and using minimum image convention. Default: False. Optional.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : Array, vector connecting self and other with the same basis as self.
-        """
-        pos = self.pos[[a,b]]    
+    def vecs(self, a: Optional[Union[int, List[int]]] = None, b: Optional[Union[int, List[int]]] = None, combs: Optional[Any] = None, normalise: bool = False, mic: bool = False) -> np.ndarray:
+        """Vectorized calculation of multiple inter-atomic vectors."""
+        if combs is None:
+            combs = make_comb(a, b)
+        combs = np.asarray(combs)
+        
+        idx_a, idx_b = combs[:, 0], combs[:, 1]
+        diffs = self.pos[idx_b] - self.pos[idx_a]
+        
         if mic:
             if self.basis in self.coord_names.cart_names:
-                pos = cart2xys(pos, self.cell)
-            a2b = pos[1] - pos[0]
-            for i in range(3):
-                a2b[i] = a2b[i] - round(a2b[i])
-            if absolute:
-                a2b = xys2cart(a2b, self.cell)
-        else:
-            a2b = pos[1] - pos[0]
-            if not absolute:
-                a2b = cart2xys(a2b, self.cell)
-        if normalise:
-                    a2b = a2b/np.linalg.norm(a2b)
-        return a2b
-    
-    def vecs(self, a: Optional[Union[int, List[int]]] = None, b: Optional[Union[int, List[int]]] = None, combs: Optional[List[Any]] = None, normalise: bool = False, absolute: bool = True, mic: bool = False) -> np.ndarray:
-        if all([a is None, b is None, combs is None]):
-            raise ValueError("No atoms specified!")
-        else:
-            if combs is not None:
-                pass
-            else:
-                try:
-                    combs = make_comb(a, b)
-                except ValueError:
-                    raise ValueError("Unsupported format!")
-        a2bs = np.asarray([self.vec(*comb, normalise = normalise, absolute = absolute, mic = mic) for comb in combs])
-        return a2bs
-            
-    def dist(self, a: int, b: int, mic: bool = False) -> float:
-        """
-        Calculate the distance between two Atom objects.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        a, b : int, the indices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convention.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : float, the distance between a and b Atoms.
-        """
-        if mic:
-            a2b = self.pos[b] - self.pos[a]
-            a2b = cart2xys(a2b, self.cell)
-            a2b -= np.round(a2b)
-            a2b = xys2cart(a2b, self.cell)
-        else:
-            a2b = self.pos[b] - self.pos[a]
-        return np.linalg.norm(a2b)
-    
-    def dists(self, at_g1: List[int], at_g2: List[int], cutoff: Optional[float] = None, mic: bool = False) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Calculates the distances between two atom groups.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        at_g1, at_g2 : lists of int, the indices of atoms groups to be calculated.
-        mic : boolean, whether or not to use the minimum image convention.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : float, the distance between a and b Atoms.
-        """
-        pairs = make_comb(at_g1, at_g2)
-        # pairs = [[pair[0], pair[1]] for pair in pairs if not pair[0] == pair[1]]
-        distances = np.zeros(len(pairs))
+                diffs = cart2xys(diffs, self.cell)
+            diffs -= np.round(diffs)
+            if self.basis in self.coord_names.cart_names:
+                diffs = xys2cart(diffs, self.cell)
         
-        for i, pair in enumerate(pairs):
-            distances[i] = self.dist(*pair, mic = mic)
+        if normalise:
+            norms = np.linalg.norm(diffs, axis=1, keepdims=True)
+            diffs = np.divide(diffs, norms, out=np.zeros_like(diffs), where=norms > 1e-12)
+            
+        return diffs
+
+    def dist(self, a: int, b: int, mic: bool = False) -> float:
+        """Distance between atom a and b in Å."""
+        v = self.vec(a, b, mic=mic)
+        if self.basis in self.coord_names.crys_names:
+            v = xys2cart(v, self.cell)
+        return np.linalg.norm(v)
+    
+    def dists(self, at_g1: Optional[List[int]] = None, at_g2: Optional[List[int]] = None, combs: Optional[Any] = None, cutoff: Optional[float] = None, mic: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+        """Vectorized calculation of distances between two atom groups."""
+        if combs is None:
+            pairs = np.asarray(make_comb(at_g1, at_g2))
+        else:
+            pairs = np.asarray(combs)
+            
+        if len(pairs) == 0: return np.array([]), np.array([])
+        
+        v = self.vecs(combs=pairs, mic=mic)
+        if self.basis in self.coord_names.crys_names:
+            v = xys2cart(v, self.cell)
+        distances = np.linalg.norm(v, axis=1)
 
         if cutoff is not None:
-            mask = np.where(distances <= cutoff)
-            distances = distances[mask]
-            pairs = np.array(pairs)[mask]
+            mask = distances <= cutoff
+            return pairs[mask], distances[mask]
         return pairs, distances
-    
-    def get_neighbours(
-        self,
-        idx: Union[int, List[int]],
-        cutoff: float,
-        symbols: Optional[Union[str, List[str]]] = None,
-        mic: bool = True,
-    ) -> Dict[int, List[dict]]:
-        """
-        Find all atoms within `cutoff` Å of each centre atom, respecting MIC.
-
-        Parameters
-        ----------
-        idx : int or list of int
-            Index (or indices) of the centre atom(s).
-        cutoff : float
-            Distance threshold in Å.
-        symbols : str or list of str, optional
-            Restrict neighbours to these element types only.
-        mic : bool, default True
-            Apply minimum image convention (required for PBC systems).
-
-        Returns
-        -------
-        dict mapping centre index → list of neighbour dicts::
-
-            {centre: [{"idx": int, "symbol": str, "dist": float}, ...], ...}
-
-        Example
-        -------
-        >>> nb = frame.get_neighbours(0, cutoff=3.5, symbols="O")
-        >>> nb[0]
-        [{"idx": 12, "symbol": "O", "dist": 2.84}, ...]
-        """
-        centres = [idx] if isinstance(idx, int) else list(idx)
-        if symbols is not None:
-            symbol_filter = {symbols} if isinstance(symbols, str) else set(symbols)
-        else:
-            symbol_filter = None
-
-        n = len(self.symbs)
-        all_idx = np.arange(n)
-
-        sym_mask = (
-            np.array([s in symbol_filter for s in self.symbs])
-            if symbol_filter is not None
-            else np.ones(n, dtype=bool)
-        )
-
-        result = {}
-        for centre in centres:
-            diffs = self.pos - self.pos[centre]        # (N, 3)
-            if mic:
-                diffs = cart2xys(diffs, self.cell)
-                diffs -= np.round(diffs)               # wrap to [-0.5, 0.5)
-                diffs = xys2cart(diffs, self.cell)
-            dists = np.linalg.norm(diffs, axis=1)      # (N,)
-
-            mask = (dists < cutoff) & sym_mask
-            mask[centre] = False                       # exclude self
-
-            result[centre] = [
-                {"idx": int(j), "symbol": str(self.symbs[j]), "dist": float(dists[j])}
-                for j in all_idx[mask]
-            ]
-        return result
 
     def angle(self, a: int, b: int, c: int, mic: bool = False) -> float:
-        """
-        Calculates the angle formed by atoms a, b and c, or the angle between vectors ba and bc.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        a, b : int, the indices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convention.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : float, the distance between a and b Atoms.
-        """
-        if mic:
-            b2a = self[a].to_crys().pos - self[b].to_crys().pos
-            b2c = self[c].to_crys().pos - self[b].to_crys().pos
-            for i in range(3):
-                b2a[i] = b2a[i] - round(b2a[i])
-                b2c[i] = b2c[i] - round(b2c[i])
-            b2a = xys2cart(b2a, self.cell)
-            b2c = xys2cart(b2c, self.cell)
-        else:
-            b2a = self[a].to_cart().pos - self[b].to_cart().pos
-            b2c = self[c].to_cart().pos - self[b].to_cart().pos
-        cos_val = np.clip(b2a.dot(b2c) / (np.linalg.norm(b2a) * np.linalg.norm(b2c)), -1.0, 1.0)
-        return np.rad2deg(np.arccos(cos_val))
-    
-    def angles(self, at_g1: List[int], at_g2: List[int], at_g3: List[int], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
-        """
-        Calculates angles for multiple atom groups.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        at_g1, at_g2, at_g3 : list of int, the indices of atom groups to be calculated.
-        mic : boolean, whether or not to use the minimum image convention.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : np.array, the angles between atom groups at_g1, at_g2, at_g3.
-        """
-        pairs = list(itertools.product(at_g1, at_g2, at_g3))
-        # pairs = [pair for pair in pairs if len(pair) == len(set(pair))]
-        angles = np.zeros(len(pairs))
+        """Angle formed by atoms a-b-c in degrees (b is vertex)."""
+        ba = self.vec(b, a, mic=mic)
+        bc = self.vec(b, c, mic=mic)
+        if self.basis in self.coord_names.crys_names:
+            ba, bc = xys2cart(ba, self.cell), xys2cart(bc, self.cell)
+        
+        cos = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+        return np.rad2deg(np.arccos(np.clip(cos, -1.0, 1.0)))
 
-        for i, pair in enumerate(pairs):
-                angles[i] = self.angle(pair[0],pair[1], pair[2], mic = mic)
-        return pairs, angles
-    
-    def dihedral(self, idx: Union[List[int], Tuple[int, ...], List[np.ndarray]], mic: bool = False) -> float:
-        """
-        Calculates the dihedral angle defined by atoms or vectors.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        idx : list or tuple, the indices of atoms to be calculated.
-        mic : boolean, whether or not to use the minimum image convention.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : np.array, the dihedral angle.
-        The dihedral angle is defined by three vectors, if the input idx has four elements, the dihedral angle is defined by 0->1, 1->2, 2->3; if the input idx has six elements, the dihedral angle is defined by 0->1, 2->3, 4->5
-        """
-        if len(idx) == 3:
-            vec1, vec2, vec3 = idx
-        elif len(idx) == 4:
-            vec1, vec2, vec3 = self.vec(idx[0],idx[1], mic = mic), self.vec(idx[1],idx[2], mic = mic), self.vec(idx[2],idx[3], mic = mic)
+    def angles(self, *at_gs: Any, mic: bool = False) -> Tuple[List[Any], np.ndarray]:
+        """Vectorized calculation of multiple bond angles."""
+        if len(at_gs) == 1 and hasattr(at_gs[0], '__len__') and len(at_gs[0]) > 0 and len(at_gs[0][0]) == 3:
+            pairs = np.asarray(at_gs[0])
+        elif len(at_gs) == 3:
+            pairs = np.asarray(list(itertools.product(at_gs[0], at_gs[1], at_gs[2])))
+        else:
+            raise ValueError("Invalid input for angles.")
+
+        ba = self.vecs(combs=pairs[:, [1, 0]], mic=mic)
+        bc = self.vecs(combs=pairs[:, [1, 2]], mic=mic)
+        if self.basis in self.coord_names.crys_names:
+            ba, bc = xys2cart(ba, self.cell), xys2cart(bc, self.cell)
+        
+        dots = np.einsum('ij,ij->i', ba, bc)
+        norms = np.linalg.norm(ba, axis=1) * np.linalg.norm(bc, axis=1)
+        cos = np.divide(dots, norms, out=np.zeros_like(dots), where=norms > 1e-12)
+        return pairs.tolist(), np.rad2deg(np.arccos(np.clip(cos, -1.0, 1.0)))
+
+    def dihedral(self, idx: List[int], mic: bool = False) -> float:
+        """Dihedral angle in degrees for 4-atom chain or 6-atom plane-plane."""
+        if len(idx) == 4:
+            v1, v2, v3 = self.vec(idx[0], idx[1], mic=mic), self.vec(idx[1], idx[2], mic=mic), self.vec(idx[2], idx[3], mic=mic)
+            if self.basis in self.coord_names.crys_names:
+                v1, v2, v3 = xys2cart(v1, self.cell), xys2cart(v2, self.cell), xys2cart(v3, self.cell)
+            n1, n2 = np.cross(v1, v2), np.cross(v2, v3)
         elif len(idx) == 6:
-            vec1, vec2, vec3 = self.vec(idx[0],idx[1], mic = mic), self.vec(idx[2],idx[3], mic = mic), self.vec(idx[4],idx[5], mic = mic)
+            v1, v2 = self.vec(idx[0], idx[1], mic=mic), self.vec(idx[1], idx[2], mic=mic)
+            v3, v4 = self.vec(idx[3], idx[4], mic=mic), self.vec(idx[4], idx[5], mic=mic)
+            if self.basis in self.coord_names.crys_names:
+                v1, v2, v3, v4 = [xys2cart(v, self.cell) for v in [v1, v2, v3, v4]]
+            n1, n2 = np.cross(v1, v2), np.cross(v3, v4)
         else:
-            raise Exception("Wrong length of indices, please specify exactly four or six atoms.")
-        n1 = np.cross(vec1, vec2)
-        n2 = np.cross(vec2, vec3)
-        cos_val = np.clip(np.dot(n1, n2) / (np.linalg.norm(n1) * np.linalg.norm(n2)), -1.0, 1.0)
-        return np.rad2deg(np.arccos(cos_val))
-    
-    def dihedrals(self, at_g: List[List[int]], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
-        """
-        Calculates the dihedral angles for multiple atom groups.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Parameters
-        at_g : list or tuple, the indices of atom groups to be calculated.
-        mic : boolean, whether or not to use the minimum image convention.
-        -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        Returns
-        out : np.array, the dihedral angle.
-        The dihedral angle is defined by three vectors, if the input idx has four elements, the dihedral angle is defined by 0->1, 1->2, 2->3; if the input idx has six elements, the dihedral angle is defined by 0->1, 2->3, 4->5
-        """
-        if len(at_g) == 4:
-            pairs = list(itertools.product(at_g[0], at_g[1], at_g[2], at_g[3]))
-            # pairs = [pair for pair in pairs if len(pair) == len(set(pair))]
-            vec1 = np.asarray([self.vec(idx[0], idx[1], mic = mic) for idx in pairs])
-            vec2 = np.asarray([self.vec(idx[1], idx[2], mic = mic) for idx in pairs])
-            vec3 = np.asarray([self.vec(idx[2], idx[3], mic = mic) for idx in pairs])
-        elif len(at_g) == 6:
-            pairs = list(itertools.product(at_g[0], at_g[1], at_g[2], at_g[3], at_g[4], at_g[5]))
-            # pairs = [pair for pair in pairs if len(pair) == len(set(pair))]
-            vec1 = np.asarray([self.vec(idx[0], idx[1], mic = mic) for idx in pairs])
-            vec2 = np.asarray([self.vec(idx[2], idx[3], mic = mic) for idx in pairs])
-            vec3 = np.asarray([self.vec(idx[4], idx[5], mic = mic) for idx in pairs])
+            raise ValueError("Dihedral requires 4 or 6 indices.")
+            
+        norm1, norm2 = np.linalg.norm(n1), np.linalg.norm(n2)
+        if norm1 < 1e-12 or norm2 < 1e-12: return 0.0
+        cos = np.dot(n1, n2) / (norm1 * norm2)
+        return np.rad2deg(np.arccos(np.clip(cos, -1.0, 1.0)))
+
+    def dihedrals(self, at_g: List[Any], mic: bool = False) -> Tuple[List[Any], np.ndarray]:
+        """Vectorized calculation of multiple dihedral angles."""
+        is_specific = len(at_g) > 0 and hasattr(at_g[0], '__len__') and len(at_g[0]) in [4, 6]
+        if is_specific:
+            pairs = np.asarray(at_g)
         else:
-            raise Exception("Wrong length of atom groups, please specify exactly four or six atom groups.")
-        n1 = np.cross(vec1, vec2)
-        n2 = np.cross(vec2, vec3)
-        cos_vals = np.clip(np.einsum('ij,ij->i', n1, n2) / (np.linalg.norm(n1, axis=1) * np.linalg.norm(n2, axis=1)), -1.0, 1.0)
-        return pairs, np.rad2deg(np.arccos(cos_vals))
-    
+            pairs = np.asarray(list(itertools.product(*at_g)))
+
+        if pairs.shape[1] == 4:
+            v1 = self.vecs(combs=pairs[:, [0, 1]], mic=mic)
+            v2 = self.vecs(combs=pairs[:, [1, 2]], mic=mic)
+            v3 = self.vecs(combs=pairs[:, [2, 3]], mic=mic)
+            if self.basis in self.coord_names.crys_names:
+                v1, v2, v3 = xys2cart(v1, self.cell), xys2cart(v2, self.cell), xys2cart(v3, self.cell)
+            n1, n2 = np.cross(v1, v2), np.cross(v2, v3)
+        else:
+            v1 = self.vecs(combs=pairs[:, [0, 1]], mic=mic)
+            v2 = self.vecs(combs=pairs[:, [1, 2]], mic=mic)
+            v3 = self.vecs(combs=pairs[:, [3, 4]], mic=mic)
+            v4 = self.vecs(combs=pairs[:, [4, 5]], mic=mic)
+            if self.basis in self.coord_names.crys_names:
+                v1, v2, v3, v4 = [xys2cart(v, self.cell) for v in [v1, v2, v3, v4]]
+            n1, n2 = np.cross(v1, v2), np.cross(v3, v4)
+
+        dots = np.einsum('ij,ij->i', n1, n2)
+        norms = np.linalg.norm(n1, axis=1) * np.linalg.norm(n2, axis=1)
+        cos = np.divide(dots, norms, out=np.zeros_like(dots), where=norms > 1e-12)
+        return pairs.tolist(), np.rad2deg(np.arccos(np.clip(cos, -1.0, 1.0)))
+
     def calc_com(self) -> np.ndarray:
-        """
-        Calculates the centre of mass of atoms.
-        """
-        masses = np.array([elements[symb] for symb in self.symbs])
-        com = np.dot(masses, self.pos)/masses.sum()
-        return com
-    
-    def calc_cog(self) -> np.ndarray:
-        """
-        Calculate the centre of geometry.
-        """
-        return self.pos.mean(axis=0)
-        
+        """Calculate the mass-weighted center of mass."""
+        masses = np.array([elements[s] for s in self.symbs])
+        return np.dot(masses, self.pos) / masses.sum()
+
     def wrap_pos(self, center: Tuple[float, float, float] = (0.5, 0.5, 0.5), pretty_translation: bool = False, eps: float = 1e-7) -> 'Atoms':
-
-        if isinstance(self.pbc[0], int):
-            pbc = [True if x == 1 else False for x in self.pbc]
-        
+        """Wrap all atomic positions into the primary unit cell."""
+        pbc = np.asarray(self.pbc, dtype=bool)
         shift = np.asarray(center) - 0.5 - eps
+        shift[~pbc] = 0.0
 
-        # Don't change coordinates when pbc is False
-        shift[np.logical_not(pbc)] = 0.0
-
-        if self.cell is None or self.cell.lattice is None:
-            raise ValueError("Cell information is missing; cannot wrap positions.")
-
-        assert np.asarray(self.cell.lattice)[np.asarray(pbc)].any(axis=1).all(), (self.cell.lattice, pbc)
-
-        fractional = np.linalg.solve(self.cell.lattice.T, np.asarray(self.pos).T).T - shift
-
+        fractional = self.to_crys().pos - shift
         if pretty_translation:
             fractional = translate_pretty(fractional, pbc)
-            shift = np.asarray(center) - 0.5
-            shift[np.logical_not(pbc)] = 0.0
-            fractional += shift
+            fractional += (np.asarray(center) - 0.5)
         else:
-            for i, periodic in enumerate(pbc):
-                if periodic:
-                    fractional[:, i] %= 1.0
-                    fractional[:, i] += shift[i]
+            fractional[:, pbc] %= 1.0
+            fractional[:, pbc] += shift[pbc]
         
         self.pos = xys2cart(fractional, self.cell)
-
         return self
-    
-    def at_sel(self, n: Union[int, str, Tuple, List, slice], inverse_select: bool = False) -> Tuple[List[int], 'Atoms']:
-        """
-        Select by chemical symbols
-        """
-        if isinstance(n, int):
-            if abs(n) >= len(self):
-                raise IndexError("The index (%d) is out of range."%n)
-            if n < 0:
-                n += len(self)
-            if not inverse_select:
-                select = n
-            else:
-                select = [x for x in list(range(len(self))) if x != n]
-
-        elif isinstance(n, str):
-            if not inverse_select:
-                select = [x for x in range(len(self)) if self.symbs[x] == n]
-            else:
-                select = [x for x in range(len(self)) if self.symbs[x] != n]
-
-        elif isinstance(n, tuple) or isinstance(n, list):
-            if all(isinstance(x, str) for x in n):
-                if inverse_select:
-                    select = [x for x in range(len(self)) if self.symbs[x] not in n]
-                else:
-                    select = [x for x in range(len(self)) if self.symbs[x] in n]
-
-            elif all(isinstance(x, int) for x in n):
-                if inverse_select:
-                    select = [x for x in range(len(self)) if x not in n]
-                else:
-                    select = n
-            else:
-                raise Exception("Use indices only or chemical symbols only enumerates, mixed indices-chemical symbol selection is not enabled yet!")
-
-        elif isinstance(n, slice):
-            start = n.start
-            stop = n.stop
-            step = n.step
-            if start is None:
-                start = 0
-            if stop is None:
-                stop = len(self)
-            if step is None:
-                step = 1
-            select = list(range(start,stop,step))
-
-        else:
-            raise TypeError("Invalid argument type.")
-        try:
-            atoms = self.__class__(symbs=self.symbs[select], pos=self.pos[select], cell=self.cell, basis=self.basis, pbc=self.pbc)
-        except IndexError:
-            select_flat = list(itertools.chain.from_iterable(select))
-            atoms = self.__class__(symbs=self.symbs[select_flat], pos=self.pos[select_flat], cell=self.cell, basis=self.basis, pbc=self.pbc)
-        return select, atoms
