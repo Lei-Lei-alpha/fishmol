@@ -90,7 +90,12 @@ class RDF(object):
         results : dataclass
             Populated results object; see class docstring for field descriptions.
         """
-        dists = np.asarray([self.traj.frames[i].dists(self.g1, self.g2, cutoff = self.settings.range[1], mic = True)[1] for i in range(self.traj.nframes)])
+        # dists = np.asarray([self.traj.frames[i].dists(self.g1, self.g2, cutoff = self.settings.range[1], mic = True)[1] for i in range(self.traj.nframes)])
+        all_dists = []
+        for i in range(self.traj.nframes):
+            _, d = self.traj.frames[i].dists(self.g1, self.g2, cutoff=self.settings.range[1], mic=True)
+            all_dists.extend(d)
+        dists = np.asarray(all_dists)
         count = np.histogram(dists, **asdict(self.settings))[0]
         self.results.count = count
         # Use the volume of the simulation box

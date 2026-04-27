@@ -2,10 +2,10 @@
 Fast I/O for extended XYZ trajectory files and LAMMPS trajectories.
 
 Provides public helpers used by :mod:`fishmol.trj`:
+Provides public helpers used by :mod:`fishmol.trj`:
 
-- :func:`read_extxyz` — memory-mapped reader that parses per-frame
-  ``Lattice=`` fields, enabling NPT trajectories where the cell changes
-  between frames.
+- :func:`read_extxyz` — memory-mapped reader for extended XYZ files that
+  parses per-frame ``Lattice=`` fields, enabling NPT trajectories.
 - :func:`write_extxyz` — writer that embeds ``Lattice=`` in every comment
   line so files are round-trippable.
 - :func:`read_trajectory_files` — flexible loader for folders (CP2K, LAMMPS)
@@ -31,35 +31,52 @@ from recordclass import make_dataclass, dataobject
 
 # Matches  key="quoted value"  OR  key=bare_value  (no commas/spaces in value)
 _KV_RE = re.compile(
-    r'(\w+)\s*=\s*(?:"([^"]*)"|([^\s,"]+))',
+    r'(\w+)\s*=\s*(?:"([^"]*)"|(.+?))(?=\s*\w+\s*=\s*|$)',
     re.IGNORECASE,
 )
 
-
 def _parse_comment(line: str) -> dict:
     """Return a lower-cased ``{key: value_string}`` dict from a comment line."""
-    return {
+    d = {
         m.group(1).lower(): (m.group(2) if m.group(2) is not None else m.group(3))
         for m in _KV_RE.finditer(line)
     }
+    # Minimal addition: extract CP2K comma-separated 'key: value' pairs safely
+    for m in re.finditer(r'(\w+)\s*[:=]\s*([^,]+)', line):
+        k = m.group(1).lower()
+        if k not in d:
+            d[k] = m.group(2).strip()
+    return d
 
 
-def _extract_cell(d: dict) -> Optional[np.ndarray]:
+def _extract_cell(d: dict, line: str) -> Optional[np.ndarray]:
     """Return a ``(3, 3)`` float64 cell matrix from a parsed comment dict.
 
     Tries both ``lattice`` and ``cell`` keys.  Accepts 9 floats (general
     triclinic) or 3 floats (orthogonal diagonal).  Returns ``None`` when
     neither key is present or the value cannot be parsed.
     """
-    for key in ('lattice', 'cell'):
+    float_re = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
+    
+    for key in ('lattice', 'Lattice', 'cell', 'Cell'):
         raw = d.get(key)
         if raw is None:
             continue
-        vals = raw.split()
+        vals = re.findall(float_re, raw)
         if len(vals) == 9:
             return np.array(vals, dtype=float).reshape(3, 3)
         if len(vals) == 3:
             return np.diag(np.array(vals, dtype=float))
+
+    # Minimal addition: CP2K nested brackets fallback using the raw line
+    m = re.search(r'(?:Cell|Lattice)\s*[:=]\s*([\[\s\d.,eE+-\]]+)', line, re.IGNORECASE)
+    if m:
+        vals = re.findall(float_re, m.group(1))
+        if len(vals) >= 9:
+            return np.array(vals[:9], dtype=float).reshape(3, 3)
+        if len(vals) >= 3:
+            return np.diag(np.array(vals[:3], dtype=float))
+            
     return None
 
 
@@ -419,6 +436,7 @@ def read_extxyz(
     path: str,
     index: Union[str, slice, int] = ':',
     timestep: Optional[float] = None,
+    timestep: Optional[float] = None,
     cell: Any = None,
 ) -> Tuple[int, int, list]:
     """Read an extended XYZ trajectory file.
@@ -498,6 +516,8 @@ def read_extxyz(
     sym_col, pos_slice = _col_indices(first_comment)
 
     frames: List[Atoms] = []
+    times: List[float] = []
+
     for fi in frame_ids:
         base = fi * block
         if base >= len(raw): break
@@ -583,7 +603,6 @@ def write_extxyz(
 
     with open(filename, 'w', encoding='utf-8') as fh:
         for i, frame in enumerate(frames):
-            # Build Lattice= string if cell data is available
             lattice_str: Optional[str] = None
             fc = frame.cell
             if fc is not None:

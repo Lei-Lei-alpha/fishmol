@@ -592,6 +592,9 @@ class Atoms(np.ndarray):
         # Don't change coordinates when pbc is False
         shift[np.logical_not(pbc)] = 0.0
 
+        if self.cell is None or self.cell.lattice is None:
+            raise ValueError("Cell information is missing; cannot wrap positions.")
+
         assert np.asarray(self.cell.lattice)[np.asarray(pbc)].any(axis=1).all(), (self.cell.lattice, pbc)
 
         fractional = np.linalg.solve(self.cell.lattice.T, np.asarray(self.pos).T).T - shift
