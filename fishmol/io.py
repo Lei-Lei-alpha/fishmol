@@ -436,7 +436,6 @@ def read_extxyz(
     path: str,
     index: Union[str, slice, int] = ':',
     timestep: Optional[float] = None,
-    timestep: Optional[float] = None,
     cell: Any = None,
 ) -> Tuple[int, int, list]:
     """Read an extended XYZ trajectory file.
