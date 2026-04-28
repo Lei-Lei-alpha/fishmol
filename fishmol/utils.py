@@ -68,16 +68,14 @@ def cart2xys(pos: Union[np.ndarray, List[float]], cell: Any) -> np.ndarray:
     """
     pos = np.asarray(pos)
     bg = np.linalg.inv(cell.lattice)
-    xyzs = np.tensordot(bg, pos.T, axes=([-1], 0)).T
-    return xyzs
+    return np.dot(pos, bg)
 
 def xys2cart(pos: Union[np.ndarray, List[float]], cell: Any) -> np.ndarray:
     """
     Fractional position (scaled position in lattice) to cartesian (absolute) position in angstrom.
     """
     pos = np.asarray(pos)
-    xyzr = np.tensordot(cell.lattice, pos.T, axes=([-1], 0)).T
-    return xyzr
+    return np.dot(pos, cell.lattice)
 
 def translate_pretty(fractional: np.ndarray, pbc: Union[Sequence[bool], np.ndarray]) -> np.ndarray:
     """Translates atoms such that fractional positions are minimized."""
@@ -101,7 +99,7 @@ def retrieve_symbol(string: str) -> str:
     """function to remove numbers in a string, so that the atom dict keys can be converted to chemical symbols"""
     return ''.join([i for i in string if not i.isdigit()])
 
-def mic_dist(pos1: np.ndarray, pos2: np.ndarray, cell: Any = None) -> float:
+def mic_dist(pos1: np.ndarray, pos2: np.ndarray, cell: Any = None) -> Union[float, np.ndarray]:
     dc_cell = make_dataclass("Cell", 'lattice')
     if isinstance(cell, dataobject):
         pass
@@ -109,9 +107,10 @@ def mic_dist(pos1: np.ndarray, pos2: np.ndarray, cell: Any = None) -> float:
         cell = dc_cell(np.asarray(cell))
     a2b = pos2 - pos1
     a2b = cart2xys(a2b, cell)
-    for i in range(3):
-        a2b[i] = a2b[i] - round(a2b[i])
+    a2b -= np.round(a2b)
     a2b = xys2cart(a2b, cell)
+    if a2b.ndim > 1:
+        return np.linalg.norm(a2b, axis=1)
     return np.linalg.norm(a2b)
 
 # Define functions to convert vectors between miller indices and cartesian coordinates

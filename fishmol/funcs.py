@@ -1,121 +1,126 @@
 """Analysis functions for MD trajectories.
 
 Provides distribution functions (RDF, ADF, DDF, CDF), vector reorientation
-dynamics (VRD), and the Van Hove correlation function (VHCF) for post-processing
-Trajectory objects produced by fishmol.trj.
+dynamics (VRD), Van Hove correlation functions (VHCF), and scalar
+distribution functions (SDF). All functions are designed to be statistically
+sound and computationally efficient for large trajectory datasets.
 """
 
-import numpy as np
-import itertools
 import warnings
-from typing import List, Tuple, Union, Optional, Any, Sequence
+import itertools
+import numpy as np
+from typing import Any, List, Optional, Tuple, Union, Dict
 from recordclass import make_dataclass, asdict
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from fishmol.utils import to_sublists, make_comb, update_progress, cart2xys, xys2cart
 from fishmol import style
 from scipy.optimize import curve_fit
+from scipy.special import gamma
 
 
 # RDF
 class RDF(object):
     """Radial distribution function g(r) between two atom groups.
 
-    The RDF describes how atomic density varies as a function of distance from a
-    reference atom. It is normalised to unity at large r in a homogeneous bulk liquid:
+    The RDF (or pair correlation function) describes how the density of particles 
+    in at_g2 varies as a function of distance from a reference particle in at_g1. 
+    It is a fundamental structural observable in statistical mechanics, defined as:
 
-        g(r) = count(r) / [ nA * nB * (4π r² Δr / V) * nframes ]
+        g(r) = V / (N_A * N_B) * ⟨ Σ_i Σ_j δ(r - |r_j - r_i|) ⟩ / (4πr²)
 
-    where nA and nB are the sizes of the two atom groups, V is the simulation box
-    volume, Δr is the bin width, and nframes is the total number of trajectory frames.
-    Pairwise distances are computed under the minimum image convention (MIC) so that
-    periodic boundary conditions are correctly handled.
+    where V is the system volume and N_A, N_B are the number of atoms in the 
+    respective groups. It is normalized such that g(r) → 1 at large r in a 
+    uniform bulk liquid, indicating a loss of spatial correlation.
+
+    Key Physical Metrics:
+    - **Peak Positions (r_max)**: Define the coordination shells (1st neighbor, 2nd neighbor, etc.).
+    - **Peak Heights (g_max)**: Indicate the strength/probability of finding a neighbor at that distance relative to a random gas.
+    - **Coordination Number (CN)**: Obtained by integrating 4πr²ρ*g(r) up to the first minimum.
 
     Parameters
     ----------
     traj : Trajectory
         Trajectory object to analyse.
     at_g1 : list of int
-        Atom indices forming the first selection (reference group).
+        Indices of the reference atoms.
     at_g2 : list of int
-        Atom indices forming the second selection (neighbour group).
+        Indices of the neighbor atoms.
     nbins : int, optional
         Number of histogram bins (controls radial resolution). Default: 200.
     range : tuple of float, optional
-        (r_min, r_max) in Å over which g(r) is computed. Default: (0.0, 15.0).
+        (r_min, r_max) in Å. If None, uses (0.0, 10.0). Default: None.
 
     Results dataclass fields (populated after calling calculate())
     -------------------------------------------------------------
-    x        : ndarray, shape (nbins,) — bin centre radii in Å.
+    edges    : ndarray, shape (nbins+1,) — radial bin edges in Å.
+    count    : ndarray, shape (nbins,) — accumulated raw distance histogram.
+    x        : ndarray, shape (nbins,) — radial bin centres in Å.
     rdf      : ndarray, shape (nbins,) — g(r) values.
-    edges    : ndarray, shape (nbins+1,) — bin edge positions in Å.
-    count    : ndarray, shape (nbins,) — raw pair count histogram.
-    pairs    : list of (int, int) — all (g1, g2) index pairs included.
-    scaler   : ndarray, shape (nframes, npairs) — per-frame pair distances in Å;
-               used by com_plot to show the time evolution of individual pairs.
     t        : ndarray, shape (nframes,) — time axis in ps.
+    pairs    : list of tuples — atom index pairs included in the calculation.
+    scaler   : ndarray — per-frame pair distances.
     plot     : Figure — g(r) line plot (set when plot=True).
     com_plot : Figure — combined time-series + g(r) panel (set when com_plot=True).
     """
-    def __init__(self, traj: Any, at_g1: Union[List[int], Any], at_g2: Union[List[int], Any], nbins: int = 200, range: Tuple[float, float] = (0.0, 15.0)) -> None:
+
+    def __init__(self, traj, at_g1, at_g2, nbins=200, range=None):
+        if range is None: range = (0.0, 10.0)
         self.g1 = at_g1
         self.g2 = at_g2
         self.traj = traj
         settings = make_dataclass("Settings", "bins range")
         self.settings = settings(nbins, range)
         results = make_dataclass("Results", "edges count x rdf plot t pairs scaler com_plot")
-        self.results = results
+        self.results = results()
         self.results.count, self.results.edges = np.histogram([-1], **asdict(self.settings))
         self.results.x = (self.results.edges[:-1] + self.results.edges[1:])/2
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         cell = np.asarray(self.traj.cell)
-        self.volume = float(cell[0].dot(np.cross(cell[1], cell[2])))
+        self.volume = float(np.abs(np.linalg.det(cell)))
         
     def calculate(self, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
-        """Compute g(r) and optionally plot the result.
-
-        Parameters
-        ----------
-        plot : bool, optional
-            If True, display a g(r) vs r line plot. Default: False.
-        com_plot : bool, optional
-            If True, display a combined panel showing the time evolution of each
-            pair distance alongside the g(r) curve. Default: False.
-        **kwargs
-            Additional keyword arguments forwarded to matplotlib plot calls
-            (e.g. color, linewidth, label).
-
-        Returns
-        -------
-        results : dataclass
-            Populated results object; see class docstring for field descriptions.
-        """
-        # dists = np.asarray([self.traj.frames[i].dists(self.g1, self.g2, cutoff = self.settings.range[1], mic = True)[1] for i in range(self.traj.nframes)])
-        all_dists = []
-        for i in range(self.traj.nframes):
-            _, d = self.traj.frames[i].dists(self.g1, self.g2, cutoff=self.settings.range[1], mic=True)
-            all_dists.extend(d)
-        dists = np.asarray(all_dists)
-        count = np.histogram(dists, **asdict(self.settings))[0]
-        self.results.count = count
-        # Use the volume of the simulation box
+        """Compute g(r) and optionally plot the result."""
         
-        # Number of each selection
+        if com_plot:
+            scaler_list = []
+            for i, frame in enumerate(self.traj):
+                _, dists = frame.dists(self.g1, self.g2, mic=True)
+                scaler_list.append(dists)
+                update_progress(i / self.traj.nframes)
+            
+            scaler = np.asarray(scaler_list)
+            dists = scaler.flatten()
+            if self.settings.range[1] is not None:
+                dists = dists[dists <= self.settings.range[1]]
+            self.results.scaler = scaler
+            self.results.pairs = list(itertools.product(self.g1, self.g2))
+        else:
+            dists_list = []
+            for i, frame in enumerate(self.traj):
+                _, d = frame.dists(self.g1, self.g2, cutoff=self.settings.range[1], mic=True)
+                dists_list.append(d)
+                update_progress(i / self.traj.nframes)
+            
+            dists = np.concatenate(dists_list)
+            self.results.scaler = dists
+            self.results.pairs = list(itertools.product(self.g1, self.g2))
+
+        count, _ = np.histogram(dists, **asdict(self.settings))
+        self.results.count = count
+        
         nA = len(self.g1)
         nB = len(self.g2)
-        N = nA * nB
+        N_pairs = nA * nB
             
-        # Volume in each radial shell
         vols = np.power(self.results.edges, 3)
-        vol = 4/3 * np.pi * np.diff(vols)
-        # Average number density
-        density = N / self.volume # number of particles per volume
-        # Save pairs as label
-        self.results.pairs = list(itertools.product(self.g1, self.g2))
-        # Distances for the temporal plot
-        self.results.scaler = dists
-        # rdf
-        self.results.rdf = np.asarray(self.results.count / (density * vol * self.traj.nframes))
+        shell_vol = 4/3 * np.pi * np.diff(vols)
+        
+        density = nB / self.volume 
+        
+        self.results.rdf = self.results.count / (nA * self.traj.nframes * density * shell_vol)
+        
+        update_progress(1.0)
         
         if plot:
             fig, ax = plt.subplots(figsize = (4.2, 3.6))
@@ -127,49 +132,89 @@ class RDF(object):
         
         if com_plot:
             fig = plt.figure(figsize=(4.8,3.6))
-            ax  = fig.add_axes([0.20, 0.16, 0.685, 0.75])
-            for i in range(self.results.scaler.shape[1]):
-                ax.plot(self.results.t, self.results.scaler[:,i], label = f"Pair {self.results.pairs[i]}", **kwargs)
-
+            ax = fig.add_axes([0.16, 0.16, 0.58, 0.75])
+            [ax.plot(self.results.t, self.results.scaler[:,i], lw = 0.5) for i in range(self.results.scaler.shape[1])]
             ax.set_xlabel(r"$t$ (ps)")
-            ax.set_ylabel(r"$r$ ($\mathrm{\AA}$)")
+            ax.set_ylabel(r"$r$ ($\AA$)")
             plt.legend(frameon = False, ncol = 2, bbox_to_anchor=(0.4, 0.9, 0.4, 0.5), loc='center', fontsize = "small")
             divider = make_axes_locatable(ax)
             ax_histy = divider.append_axes("right", 0.5, pad=0.05, sharey=ax)
             ax_histy.yaxis.tick_right()
             ax_histy.plot(self.results.rdf, self.results.x)
+            ax_histy.set_xlabel(r"$g(r)$")
             plt.show()
             self.results.com_plot = fig
             
         return self.results
 
+    def summary(self):
+        """Print a scientific interpretation of the computed RDF."""
+        print("="*75)
+        print(" RADIAL DISTRIBUTION FUNCTION (RDF) SUMMARY")
+        print("="*75)
+        
+        peaks_idx = []
+        for i in range(1, len(self.results.rdf)-1):
+            if self.results.rdf[i] > self.results.rdf[i-1] and self.results.rdf[i] > self.results.rdf[i+1]:
+                if self.results.rdf[i] > 1.1: # Only report significant peaks
+                    peaks_idx.append(i)
+                    
+        print(f" Analysis Scope : {len(self.g1)} reference atoms vs {len(self.g2)} target atoms")
+        print(f" Bulk Density   : {len(self.g2) / self.volume:.4e} atoms / Å³")
+        print("-" * 75)
+        
+        if not peaks_idx:
+            print(" Structuring    : No significant coordination shells found (gas-like or highly dilute).")
+        else:
+            print(" STRUCTURAL PEAKS (Coordination Shells):")
+            for i, p in enumerate(peaks_idx[:3]): # Report up to first 3 shells
+                r_val = self.results.x[p]
+                g_val = self.results.rdf[p]
+                shell = ["1st", "2nd", "3rd"][i]
+                print(f" {shell} Shell Peak: r = {r_val:.2f} Å  |  g(r) max = {g_val:.2f}")
+                
+        print("-" * 75)
+        print(" INTERPRETATION GUIDE:")
+        print(" - The first peak identifies the typical nearest-neighbor bond distance.")
+        print(" - The depth of the first minimum (valley) indicates the stability of the shell.")
+        print("   If the minimum reaches ~0, atoms rarely exchange between the 1st and 2nd shell.")
+        print(" - If g(r) → 1 at large r, the system is a homogeneous bulk liquid.")
+        print(" - If g(r) drops to 0 at large r, you are analyzing a finite cluster or droplet.")
+        print("="*75)
+
+
 # ADF
 class ADF(object):
     """Angular distribution function g(α) for three-body angles.
 
-    The ADF describes the probability distribution of the bond angle α formed by
-    the triplet g1–g2–g3, where g2 is the central atom group. All angles are
-    computed under the minimum image convention.
+    The ADF describes the probability distribution of the angle α formed by
+    the atom triplet g1–g2–g3, where g2 is the central vertex. It reveals the
+    local orientational order and geometric coordination around a central atom.
 
     When cone_correction=True (default), the raw histogram is divided by sin(α)
-    to account for the increasing area of the solid-angle shell at angle α:
+    to mathematically account for the increasing area of the solid-angle shell:
 
-        g(α) = count(α) / [ nA * nB * nC * nframes * sin(α) ]
+        g(α) = N_obs(α) / [ N_triplets * nframes * sin(α) ]
 
-    Without the correction, the distribution is biased toward larger angles simply
-    because there is more solid-angle available. The corrected g(α) integrates to a
-    constant, allowing direct comparison between different systems.
+    Without the correction, a purely random gas of atoms will artificially peak
+    at 90° simply because the solid-angle volume is largest at the equator.
+    The sine-corrected g(α) integrates to a constant, allowing direct comparison
+    between ordered structures (e.g. tetrahedral vs octahedral).
+
+    Key Physical Metrics:
+    - **Peak Positions**: Reveal the dominant coordination geometry (e.g. ~104.5° for water, ~109.5° for tetrahedral, ~90°/180° for octahedral).
+    - **Peak Widths**: Broader peaks indicate higher thermal fluctuations or structural disorder in the molecular scaffold.
 
     Parameters
     ----------
     traj : Trajectory
         Trajectory object to analyse.
     at_g1 : list of int
-        Atom indices of the first terminal group (one end of the angle).
+        Atom indices of the first terminal group.
     at_g2 : list of int
-        Atom indices of the central group (vertex of the angle).
+        Atom indices of the central group (vertex).
     at_g3 : list of int
-        Atom indices of the second terminal group (other end of the angle).
+        Atom indices of the second terminal group.
     nbins : int, optional
         Number of histogram bins. Default: 200.
     range : tuple of float, optional
@@ -181,13 +226,14 @@ class ADF(object):
     adf      : ndarray, shape (nbins,) — g(α) values.
     edges    : ndarray, shape (nbins+1,) — bin edge angles in degrees.
     count    : ndarray, shape (nbins,) — accumulated raw angle histogram.
-    pairs    : array — atom index triplets included in the calculation.
-    scaler   : ndarray, shape (nframes, npairs) — per-frame angle values in degrees.
+    pairs    : list — atom index triplets included in the calculation.
+    scaler   : ndarray, shape (nframes, ntriplets) — per-frame angle values.
     t        : ndarray, shape (nframes,) — time axis in ps.
-    plot     : Figure — g(α) line plot (set when plot=True).
-    com_plot : Figure — combined time-series + g(α) panel (set when com_plot=True).
+    plot     : Figure — g(α) line plot.
+    com_plot : Figure — combined time-series + g(α) panel.
     """
-    def __init__(self, traj: Any, at_g1: Any, at_g2: Any, at_g3: Any, nbins: int = 200, range: Tuple[float, float] = (0.0, 180.0)) -> None:
+
+    def __init__(self, traj, at_g1, at_g2, at_g3, nbins=200, range=(0.0, 180.0)):
         self.g1 = at_g1
         self.g2 = at_g2
         self.g3 = at_g3
@@ -196,56 +242,33 @@ class ADF(object):
         self.settings = settings(nbins, range)
         _, edges = np.histogram([-1], **asdict(self.settings))
         results = make_dataclass("Results", "edges count x adf plot t pairs scaler com_plot")
-        self.results = results
+        self.results = results()
         self.results.edges = edges
         self.results.x = (edges[:-1] + edges[1:]) / 2
         self.results.count = np.zeros(self.settings.bins)
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         
     def calculate(self, cone_correction: bool = True, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
-        """Compute g(α) and optionally plot the result.
-
-        Parameters
-        ----------
-        cone_correction : bool, optional
-            Divide the raw histogram by sin(α) to correct for solid-angle geometry.
-            Should be True (default) for physically meaningful angular distributions.
-            Set to False only if you need the raw, uncorrected histogram shape.
-        plot : bool, optional
-            If True, display a g(α) vs α line plot. Default: False.
-        com_plot : bool, optional
-            If True, display a combined panel showing the angle time series alongside
-            the g(α) curve. Default: False.
-        **kwargs
-            Additional keyword arguments forwarded to matplotlib plot calls.
-
-        Returns
-        -------
-        results : dataclass
-            Populated results object; see class docstring for field descriptions.
-        """
+        """Compute g(α) and optionally plot the result."""
         angles = []
-        for frame in self.traj:
+        for i, frame in enumerate(self.traj):
             pairs, angle = frame.angles(self.g1, self.g2, self.g3, mic = True)
             count = np.histogram(angle, **asdict(self.settings))[0]
             self.results.count += count
             angles.append(angle)
+            update_progress(i / self.traj.nframes)
         
         self.results.pairs = pairs
         self.results.scaler = np.asarray(angles)
-        # Number of each selection
-        NA = len(self.g1)
-        NB = len(self.g2)
-        NC = len(self.g3)
         
-        # Calculate ADF
+        N = len(pairs)
         if cone_correction:
-            # Divide by sin(θ) to correct for the solid-angle shell (2π sinθ dθ).
-            # np.maximum guards against near-zero values at θ ≈ 0° and θ ≈ 180°.
             sin_theta = np.maximum(np.sin(self.results.x * np.pi / 180), 1e-10)
-            self.results.adf = self.results.count / (NA * NB * NC * self.traj.nframes * sin_theta)
+            self.results.adf = self.results.count / (N * self.traj.nframes * sin_theta)
         else:
-            self.results.adf = self.results.count / (NA * NB * NC * self.traj.nframes)
+            self.results.adf = self.results.count / (N * self.traj.nframes)
+        
+        update_progress(1.0)
         
         if plot:
             fig, ax = plt.subplots(figsize = (4.2, 3.6))
@@ -257,10 +280,8 @@ class ADF(object):
         
         if com_plot:
             fig = plt.figure(figsize=(4.8,3.6))
-            ax  = fig.add_axes([0.20, 0.16, 0.685, 0.75])
-            for i in range(self.results.scaler.shape[1]):
-                ax.plot(self.results.t, self.results.scaler[:,i], label = f"Pair {self.results.pairs[i]}", **kwargs)
-
+            ax = fig.add_axes([0.16, 0.16, 0.58, 0.75])
+            [ax.plot(self.results.t, self.results.scaler[:,i], lw = 0.5) for i in range(self.results.scaler.shape[1])]
             ax.set_xlabel(r"$t$ (ps)")
             ax.set_ylabel(r"$\alpha$ ($^{\circ}$)")
             plt.legend(frameon = False, ncol = 2, bbox_to_anchor=(0.4, 0.9, 0.4, 0.5), loc='center', fontsize = "small")
@@ -268,97 +289,122 @@ class ADF(object):
             ax_histy = divider.append_axes("right", 0.5, pad=0.05, sharey=ax)
             ax_histy.yaxis.tick_right()
             ax_histy.plot(self.results.adf, self.results.x)
+            ax_histy.set_xlabel(r"$g(\alpha)$")
             plt.show()
             self.results.com_plot = fig
             
         return self.results
 
+    def summary(self):
+        """Print a scientific interpretation of the computed ADF."""
+        print("="*75)
+        print(" ANGULAR DISTRIBUTION FUNCTION (ADF) SUMMARY")
+        print("="*75)
+        
+        peaks_idx = []
+        for i in range(1, len(self.results.adf)-1):
+            if self.results.adf[i] > self.results.adf[i-1] and self.results.adf[i] > self.results.adf[i+1]:
+                if self.results.adf[i] > 0.05 * np.max(self.results.adf): # Noise filter
+                    peaks_idx.append(i)
+                    
+        print(f" Analysis Scope : {len(self.results.pairs)} distinct triplets tracked.")
+        print("-" * 75)
+        
+        if not peaks_idx:
+            print(" Structuring    : No distinct angular preference observed.")
+        else:
+            print(" DOMINANT GEOMETRIES (Angular Peaks):")
+            for i, p in enumerate(peaks_idx[:3]): # Report up to first 3 peaks
+                ang_val = self.results.x[p]
+                mag_val = self.results.adf[p]
+                
+                # Simple geometry guesser
+                geo = "Unknown"
+                if 100 < ang_val < 109: geo = "Bent / Water-like"
+                elif 109 <= ang_val <= 110: geo = "Tetrahedral"
+                elif 118 <= ang_val <= 122: geo = "Trigonal Planar"
+                elif 88 <= ang_val <= 92: geo = "Octahedral / Square Planar"
+                elif 170 <= ang_val <= 180: geo = "Linear"
+                
+                print(f" Peak {i+1}: α = {ang_val:.1f}° ({geo})  |  Intensity = {mag_val:.2e}")
+                
+        print("-" * 75)
+        print(" INTERPRETATION GUIDE:")
+        print(" - The solid-angle correction (1/sin(α)) has been applied.")
+        print(" - Sharp, intense peaks imply a rigid, well-defined molecular framework.")
+        print(" - Broad peaks indicate structural flexibility or high-temperature thermal bending.")
+        print("="*75)
+
+
 # DDF
 class DDF(object):
-    """Dihedral distribution function g(δ) for torsion angles.
+    """Dihedral distribution function g(δ) for four-body torsions.
 
-    The DDF describes the probability distribution of the torsion angle δ defined
-    by four consecutive bonded atoms A–B–C–D. The torsion angle is the angle
-    between the plane containing A–B–C and the plane containing B–C–D, measured
-    about the central B–C bond axis.
+    The DDF computes the probability density of the dihedral angle δ. It reveals
+    the conformational preferences (e.g., trans vs. gauche) of molecules or 
+    the relative orientation between two molecular planes.
 
-    Unlike the ADF, no sin(δ) correction is applied: dihedral angles are azimuthal
-    quantities (uniform geometric probability) and their distribution is directly
-    proportional to the raw histogram counts.
+    The distribution is properly normalized such that it integrates to exactly 1
+    over the range [-180°, 180°]:
 
-        g(δ) = count(δ) / [ N_dihedrals * nframes ]
+        g(δ) = N_obs(δ) / [ N_dihedrals * nframes * Δδ ]
 
-    where N_dihedrals is the number of unique four-atom torsion combinations and
-    nframes is the total number of trajectory frames. All dihedral angles are
-    computed under the minimum image convention.
+    where Δδ is the bin width.
+
+    Key Physical Metrics:
+    - **Trans State (δ ≈ 180° / -180°)**: Typically the lowest energy, most extended conformation for alkyl chains.
+    - **Gauche States (δ ≈ ±60°)**: Higher energy coiled conformations.
+    - **Planarity (δ ≈ 0°)**: Indicates strong π-conjugation or steric locking.
 
     Parameters
     ----------
     traj : Trajectory
         Trajectory object to analyse.
-    at_g : list of list of int
-        Atom index groups defining the four-body torsion combinations. The groups
-        are passed directly to ``Atoms.dihedrals()``.
+    at_g : list
+        - Legacy mode: list of four lists of indices [g1, g2, g3, g4].
+        - Specific mode: list of 4-index (atom chain) or 6-index (plane-plane) sublists.
     nbins : int, optional
         Number of histogram bins. Default: 200.
     range : tuple of float, optional
-        (δ_min, δ_max) in degrees. Default: (0.0, 180.0).
+        (δ_min, δ_max) in degrees. Default: (-180.0, 180.0).
 
-    Results dataclass fields (populated after calling calculate())
-    -------------------------------------------------------------
-    x        : ndarray, shape (nbins,) — bin centre angles in degrees.
-    ddf      : ndarray, shape (nbins,) — g(δ) values.
-    edges    : ndarray, shape (nbins+1,) — bin edge angles in degrees.
-    count    : ndarray, shape (nbins,) — accumulated raw torsion histogram.
-    angles   : ndarray, shape (nframes, ndihedrals) — per-frame torsion values in degrees.
-    t        : ndarray, shape (nframes,) — time axis in ps.
-    plot     : Figure — g(δ) line plot (set when plot=True).
-    com_plot : Figure — combined time-series + g(δ) panel (set when com_plot=True).
+    Results dataclass fields
+    ------------------------
+    x        : ndarray — bin centre angles in degrees.
+    ddf      : ndarray — g(δ) values.
+    angles   : ndarray, shape (nframes, n_dihedrals) — per-frame dihedral values.
     """
-    def __init__(self, traj: Any, at_g: Any, nbins: int = 200, range: Tuple[float, float] = (0.0, 180.0)) -> None:
+
+    def __init__(self, traj, at_g, nbins=200, range=(-180.0, 180.0)):
         self.g = at_g
         self.traj = traj
         settings = make_dataclass("Settings", "bins range")
         self.settings = settings(nbins, range)
         _, edges = np.histogram([-1], **asdict(self.settings))
         results = make_dataclass("Results", "edges count x ddf plot t angles com_plot")
-        self.results = results
+        self.results = results()
         self.results.edges = edges
         self.results.x = (edges[:-1] + edges[1:]) / 2
         self.results.count = np.zeros(self.settings.bins)
         self.results.t = np.linspace(0, self.traj.timestep * (self.traj.nframes - 1)/1000, self.traj.nframes)
         
     def calculate(self, plot: bool = False, com_plot: bool = False, **kwargs: Any) -> Any:
-        """Compute g(δ) and optionally plot the result.
-
-        Parameters
-        ----------
-        plot : bool, optional
-            If True, display a g(δ) vs δ line plot. Default: False.
-        com_plot : bool, optional
-            If True, display a combined panel showing the torsion angle time series
-            alongside the g(δ) curve. Default: False.
-        **kwargs
-            Additional keyword arguments forwarded to matplotlib plot calls.
-
-        Returns
-        -------
-        results : dataclass
-            Populated results object; see class docstring for field descriptions.
-        """
+        """Compute g(δ) and optionally plot."""
         angles = []
-        for frame in self.traj:
+        for i, frame in enumerate(self.traj):
             pairs, angle = frame.dihedrals(self.g, mic = True)
             count = np.histogram(angle, **asdict(self.settings))[0]
             self.results.count += count
             angles.append(angle)
+            update_progress(i / self.traj.nframes)
         
         self.results.angles = np.asarray(angles)
-        
         N = len(pairs)
+        bin_width = self.results.edges[1] - self.results.edges[0]
+        # Proper probability density normalization
+        self.results.ddf = self.results.count / (N * self.traj.nframes * bin_width)
         
-        # Calculate DDF
-        self.results.ddf = np.asarray(self.results.count) / (N * self.traj.nframes)
+        update_progress(1.0)
         
         if plot:
             fig, ax = plt.subplots(figsize = (4.2, 3.6))
@@ -370,132 +416,165 @@ class DDF(object):
         
         if com_plot:
             fig = plt.figure(figsize=(4.8,3.6))
-            ax  = fig.add_axes([0.20, 0.16, 0.685, 0.75])
-            for i in range(self.results.angles.shape[1]):
-                ax.plot(self.results.t, self.results.angles[:,i], **kwargs)
-
+            ax = fig.add_axes([0.16, 0.16, 0.58, 0.75])
+            [ax.plot(self.results.t, self.results.angles[:,i], lw = 0.5) for i in range(self.results.angles.shape[1])]
             ax.set_xlabel(r"$t$ (ps)")
             ax.set_ylabel(r"$\delta$ ($^{\circ}$)")
             divider = make_axes_locatable(ax)
             ax_histy = divider.append_axes("right", 0.5, pad=0.05, sharey=ax)
             ax_histy.yaxis.tick_right()
             ax_histy.plot(self.results.ddf, self.results.x)
+            ax_histy.set_xlabel(r"$g(\delta)$")
             plt.show()
             self.results.com_plot = fig
             
         return self.results
+
+    def summary(self):
+        """Print a scientific interpretation of the computed DDF."""
+        print("="*75)
+        print(" DIHEDRAL DISTRIBUTION FUNCTION (DDF) SUMMARY")
+        print("="*75)
+        
+        # Calculate circular mean
+        rad_angles = np.deg2rad(self.results.angles)
+        mean_cos = np.mean(np.cos(rad_angles))
+        mean_sin = np.mean(np.sin(rad_angles))
+        circ_mean = np.rad2deg(np.arctan2(mean_sin, mean_cos))
+        
+        print(f" Analysis Scope : {self.results.angles.shape[1]} distinct dihedrals tracked.")
+        print(f" Circular Mean  : {circ_mean:.1f}°")
+        print("-" * 75)
+        print(" INTERPRETATION GUIDE:")
+        print(" - δ ≈ 180° or -180° : Trans conformation (often the global energy minimum).")
+        print(" - δ ≈ ±60°          : Gauche conformation (sterically hindered).")
+        print(" - δ ≈ 0°            : Cis/Planar conformation (rare unless π-conjugated).")
+        print(" - Rapidly jumping time-series in com_plot indicates low rotational barriers.")
+        print("="*75)
 
 
 # CDF
 class CDF(object):
     """Combined (joint) distribution function correlating two scalar observables.
 
-    The CDF is a 2D histogram that reveals the joint probability of two structural
-    quantities occurring simultaneously across all trajectory frames. A typical use
-    case is correlating a pair distance (from an RDF) with a bond angle (from an ADF)
-    to expose structural correlations that are invisible in the individual 1D
-    distributions. For example, a CDF of O···O distance vs O–H···O angle can pinpoint
-    the geometry of hydrogen-bonded configurations.
+    The CDF reveals the 2D joint probability density of finding a system in a 
+    state characterized by specific values of two observables simultaneously 
+    (e.g., a specific bond distance AND a specific bond angle).
 
-    The CDF takes two already-computed Results objects (e.g., from RDF and ADF) and
-    their flat per-frame observable arrays (stored in ``results.scaler``) as input.
-    The 2D histogram bins are taken directly from the edges of those Results objects,
-    so the spatial and angular axes are automatically consistent with the prior 1D
-    analysis.
+    Mathematically, it computes the normalized 2D histogram of the two input 
+    arrays:
+
+        P(x, y) = N_obs(x, y) / [ N_total * Δx * Δy ]
+
+    Key Physical Applications:
+    - **Hydrogen Bonding**: Correlating D-A distance with D-H...A angle to map the free energy surface of the H-bond.
+    - **Conformational Analysis**: Ramachandran plots (φ vs. ψ dihedrals) to identify stable secondary structures in polymers or proteins.
 
     Parameters
     ----------
-    scaler1 : Results dataclass
-        Results object from a prior RDF, ADF, or DDF calculation. Must contain
-        ``edges`` and ``scaler`` attributes, plus the attribute named by ``names[0]``
-        (e.g., ``rdf`` or ``adf``) for the marginal plot.
-    scaler2 : Results dataclass
-        Results object for the second observable, with the same requirements.
+    scaler1, scaler2 : Results
+        Results objects from RDF, ADF, or DDF calculations. The `.scaler` 
+        attributes of these objects are used as the raw (x, y) data pairs.
     names : list of str, optional
-        Two-element list giving the attribute names of the 1D distributions to plot
-        in the marginal panels (e.g., ``["rdf", "adf"]``). Required when using the
-        default range or when plot=True.
-    range : tuple of [float, float], optional
-        ``([x_min, x_max], [y_min, y_max])`` defining the extent of the 2D histogram.
-        Defaults to ``([0, scaler1.max], [0, scaler2.max])``.
+        Display names for the marginal panels (e.g. ["Distance (Å)", "Angle (°)"]).
+    range : tuple of lists, optional
+        ([x_min, x_max], [y_min, y_max]). If None, ranges are determined automatically.
 
-    Results dataclass fields (populated after calling calculate())
-    -------------------------------------------------------------
-    cdf     : ndarray, shape (nbins_y, nbins_x) — 2D joint histogram counts (transposed
-              so the first axis corresponds to the y-axis observable).
-    xedges  : ndarray — bin edges for the x-axis observable (from scaler1).
-    yedges  : ndarray — bin edges for the y-axis observable (from scaler2).
-    plot    : Figure — 2D contour plot with marginal 1D panels (set when plot=True).
+    Results dataclass fields
+    ------------------------
+    cdf      : ndarray, 2D — Normalized joint probability density.
+    xedges, yedges : ndarrays — Bin boundaries.
+    xcenters, ycenters : ndarrays — Not directly set in current implementation, relies on s1.x and s2.x.
+    plot     : Figure — 2D contour plot with marginal 1D distributions.
     """
     def __init__(self, scaler1: Any, scaler2: Any, names: Optional[List[str]] = None, range: Optional[Tuple[List[float], List[float]]]  = None) -> None:
         self.s1 = scaler1
         self.s2 = scaler2
         self.names = names
+
+        def get_dist(obj, name):
+            if hasattr(obj, name): return getattr(obj, name)
+            for attr in ['rdf', 'adf', 'ddf', 'cdf']:
+                if hasattr(obj, attr): return getattr(obj, attr)
+            raise AttributeError(f"Could not find distribution data in Results object.")
+
         if range is None:
-            range = ([0, getattr(self.s1, names[0]).max()],[0, getattr(self.s2, names[1]).max()])
+            v1 = get_dist(self.s1, names[0] if names else "")
+            v2 = get_dist(self.s2, names[1] if names else "")
+            range = ([0, v1.max()],[0, v2.max()])
+        
         settings = make_dataclass("Settings", "range")
         self.settings = settings(range)
         results = make_dataclass("Results", "xedges yedges xcenters ycenters x y cdf plot")
-        self.results = results
+        self.results = results()
         
     def calculate(self, plot: bool = True, **kwargs: Any) -> Any:
-        """Compute the 2D joint histogram and optionally plot the result.
+        """Compute the 2D joint histogram and plot the results."""
+        def get_dist(obj, name):
+            if hasattr(obj, name): return getattr(obj, name)
+            for attr in ['rdf', 'adf', 'ddf', 'cdf']:
+                if hasattr(obj, attr): return getattr(obj, attr)
+            return None
 
-        Parameters
-        ----------
-        plot : bool, optional
-            If True (default), display a filled contour plot with the 1D marginal
-            distributions of each observable in side panels.
-        **kwargs
-            Additional keyword arguments forwarded to ``np.histogram2d``
-            (e.g. normed, weights).
-
-        Returns
-        -------
-        results : dataclass
-            Populated results object; see class docstring for field descriptions.
-        """
         self.results.xedges = self.s1.edges
         self.results.yedges = self.s2.edges
-
         x = self.s1.scaler.flatten()
         y = self.s2.scaler.flatten()
 
-        self.results.cdf, self.results.xedges, self.results.yedges = np.histogram2d(x, y, bins = (self.results.xedges, self.results.yedges), **asdict(self.settings))
-        self.results.cdf = self.results.cdf.T # Transpose so that the plot is correct
+        # density=True normalizes the histogram so the integral over the range is 1
+        H, xedges, yedges = np.histogram2d(x, y, bins=(self.results.xedges, self.results.yedges), density=True, **asdict(self.settings))
+        self.results.cdf = H.T
         
         if plot:
             fig = plt.figure(figsize=(4.8, 4.0))
             ax  = fig.add_axes([0.16, 0.16, 0.82, 0.75])
-
             X, Y = np.meshgrid(self.s1.x, self.s2.x)
             levels = np.linspace(self.results.cdf.min(), self.results.cdf.max(), 50)
-            CS = ax.contourf(X, Y, self.results.cdf, cmap = style.cdf_cmap, levels = levels)
-
-            # ax.set_xlabel(r"$r$ ($\AA$)")
-            # ax.set_ylabel(r"$\alpha$ ($^{\circ}$)")
-            # ax.set_xlim(2,5)
-
+            CS = ax.contourf(X, Y, self.results.cdf, cmap=style.cdf_cmap, levels=levels)
+            ax.set_xlabel(self.names[0] if self.names else "")
+            ax.set_ylabel(self.names[1] if self.names else "")
             divider = make_axes_locatable(ax)
-
             ax_histx = divider.append_axes("top", 0.5, pad=0.05, sharex=ax)
-            ax_histx.xaxis.set_tick_params(labelbottom=False)
-            ax_histx.yaxis.set_tick_params(labelleft=False)
             ax_histx.xaxis.tick_top()
-            ax_histx.plot(self.s1.x, getattr(self.s1, self.names[0]))
-
+            ax_histx.plot(self.s1.x, get_dist(self.s1, self.names[0] if self.names else ""))
             ax_histy = divider.append_axes("right", 0.5, pad=0.05, sharey=ax)
-            ax_histy.xaxis.set_tick_params(labelbottom=False)
-            ax_histy.yaxis.set_tick_params(labelleft=False)
             ax_histy.yaxis.tick_right()
-            ax_histy.plot(getattr(self.s2, self.names[1]), self.s2.x)
-
-            plt.colorbar(CS, pad=0.035, location = "right", ax = ax)
-            # plt.savefig("cdf_water14_15_water143.jpg", dpi = 600)
-            self.results.plot = fig
+            ax_histy.plot(get_dist(self.s2, self.names[1] if self.names else ""), self.s2.x)
+            plt.colorbar(CS, pad=0.035, location="right", ax=ax)
             plt.show()
-            
+            self.results.plot = fig
         return self.results
+
+    def summary(self):
+        """Print a scientific interpretation of the computed CDF."""
+        print("="*75)
+        print(" COMBINED DISTRIBUTION FUNCTION (CDF) SUMMARY")
+        print("="*75)
+        
+        # Find global maximum
+        max_idx = np.unravel_index(np.argmax(self.results.cdf), self.results.cdf.shape)
+        max_x = self.s1.x[max_idx[1]] # Transposed geometry
+        max_y = self.s2.x[max_idx[0]]
+        max_density = self.results.cdf[max_idx]
+        
+        x_label = self.names[0] if self.names else "Variable 1"
+        y_label = self.names[1] if self.names else "Variable 2"
+        
+        print(f" Correlating : '{x_label}' vs '{y_label}'")
+        print("-" * 75)
+        print(" MOST PROBABLE STATE (Global Maximum):")
+        print(f" {x_label} = {max_x:.2f}")
+        print(f" {y_label} = {max_y:.2f}")
+        print(f" Peak Density = {max_density:.2e}")
+        
+        print("-" * 75)
+        print(" INTERPRETATION GUIDE:")
+        print(" - The contour map effectively displays the Free Energy Surface (FES).")
+        print("   Higher density (red/warm regions) = Lower Free Energy = More Stable.")
+        print(" - Diagonal streaks indicate strong coupling between the two variables.")
+        print(" - Circular or isolated peaks indicate stable, independent conformational states.")
+        print("="*75)
+
 
 # VRD
 class VRD(object):
@@ -505,29 +584,19 @@ class VRD(object):
     axis) loses memory of its initial orientation. It computes the time
     autocorrelation function of the l-th order Legendre polynomial:
 
-        C_l(t) = < P_l( u(0) · u(t) ) >
+        C_l(t) = ⟨ P_l( u(t_0) · u(t_0 + t) ) ⟩
 
     where u(t) is the unit vector at time t and the angle brackets denote an
-    ensemble average over all vectors and all time origins. The three polynomials
-    available are:
+    ensemble average over all vectors and all time origins t_0.
 
-        P_1(x) = x                         (l=1, related to IR absorption)
-        P_2(x) = (3x² − 1) / 2            (l=2, related to NMR T₁ and Raman)
-        P_3(x) = (5x³ − 3x) / 2           (l=3, related to higher-order spectra)
+        P_1(x) = x                         (l=1) (Dielectric relaxation, IR)
+        P_2(x) = (3x² − 1) / 2             (l=2) (NMR, Raman scattering)
+        P_3(x) = (5x³ − 3x) / 2            (l=3)
 
     C_l(t) decays from 1 at t=0 toward 0 as the vector randomises. The decay is
     fitted with the Kohlrausch–Williams–Watts (KWW) stretched exponential:
 
-        C(t) = exp( −(t / τ)^β )
-
-    where τ is the relaxation time (ps) and β ∈ (0, 1] is the stretching exponent
-    (β=1 reduces to a single exponential; β<1 indicates heterogeneous dynamics).
-
-    The trajectory is divided into non-overlapping chunks of ``num`` frames. Within
-    each chunk, the autocorrelation is computed using the first frame as the time
-    origin, then the results are averaged over all chunks. Reducing ``skip`` uses
-    more chunks and reduces statistical error at the cost of correlation between
-    samples.
+        C(t) = exp[ −(t / τ)^β ]
 
     Parameters
     ----------
@@ -537,213 +606,128 @@ class VRD(object):
     spec : list of [list of int, list of int] or ndarray
         When ``traj`` is given: a two-element list ``[g1_indices, g2_indices]``
         defining the atom pairs whose inter-atomic vector is tracked.
-        When ``traj`` is None: a 2D ndarray of shape (nframes, 3) containing
-        the pre-computed vector time series.
+        When ``traj`` is None: a 3D ndarray of shape (nframes, nvectors, 3) 
+        containing the pre-computed vector time series.
     timestep : float, optional
         Trajectory timestep in fs. Required when ``traj`` is None; ignored
         otherwise (taken from ``traj.timestep``).
     num : int, optional
-        Number of frames per analysis chunk. Determines the maximum lag time:
+        Maximum number of frames for the lag time (window size). 
         t_max = timestep * (num − 1) / 1000 ps. Default: 2000.
     sampling : int, optional
-        Frame stride within each chunk. A value of 5 uses every 5th frame,
-        reducing memory use and computation while coarsening time resolution.
-        Default: 5.
+        Frame stride within the correlation window. A value of 5 uses every 
+        5th lag time. Default: 5.
     skip : int, optional
-        Chunk stride: only every ``skip``-th chunk is used. Increasing ``skip``
-        reduces correlations between chunks at the cost of statistical precision.
-        Default: 10.
+        Stride between time origins (t_0). Default: 10.
 
-    Results dataclass fields (populated after calling calculate())
-    -------------------------------------------------------------
+    Results dataclass fields
+    ------------------------
     t          : ndarray, shape (num//sampling,) — lag time axis in ps.
     C_t        : ndarray — ensemble-averaged C_l(t) values.
-    C_t_error  : ndarray — standard error of the mean across chunks.
-    t_fit      : ndarray, shape (200,) — dense time axis for the fitted curve
-                 (set when fit=True).
-    C_t_fit    : ndarray — KWW fitted values on t_fit (set when fit=True).
-    fit_params : ndarray — fitted [τ, β] parameters (set when fit=True).
-    plot       : Figure — C_l(t) scatter plot, optionally with the KWW fit curve
-                 (set when plot=True).
+    C_t_error  : ndarray — standard error of the mean across different origins.
+    t_fit      : ndarray, shape (200,) — dense time axis for the fitted curve.
+    C_t_fit    : ndarray — KWW fitted values on t_fit.
+    fit_params : ndarray — fitted [τ, β] parameters.
+    tau        : float — fitted relaxation time τ in ps.
+    beta       : float — fitted stretching exponent β.
+    tau_eff    : float — effective (integrated) relaxation time in ps.
+    plot       : Figure — C_l(t) plot.
     """
     def __init__(self, traj: Any = None, spec: Any = None, timestep: Optional[float] = None, num: int = 2000, sampling: int = 5, skip: int = 10) -> None:
-        results = make_dataclass("Results", "t C_t C_t_error t_fit C_t_fit fit_params plot")
-        self.results = results
+        results_cls = make_dataclass("Results", "t C_t C_t_error t_fit C_t_fit fit_params tau beta tau_eff plot l")
+        self.results = results_cls()
         self.traj = traj
         self.spec = spec
         self.num = num
         self.sampling = sampling
         self.skip = skip
-        if traj is not None:
-            self.traj = traj
-            self.t_step = traj.timestep
-        elif traj is None:
-            if isinstance(self.spec, np.ndarray):
-                if timestep is not None:
-                    self.t_step = timestep
-                else:
-                    warnings.warn("VRD created with array of vectors without specifying timestep, using default timestep of 5 fs, please specify the timestep you are using if this is incorrect.")
-                    self.t_step = 5
-            else:
-                raise Exception("Please either specify\n:(i)a Trajectory object and a list of the indices of two atoms\nor\n(ii) a np.array object of vector data and the timestep of the vector data.")
-        else:
-            raise Exception("Please either specify\n:(i)a Trajectory object and a list of the indices of two atoms\nor\n(ii) a np.array object of vector data and the timestep of the vector data.")
-        self.results.t = np.linspace(0, self.t_step * (self.num - 1) / 1000, num = self.num//self.sampling)
+        self.t_step = traj.timestep if traj else (timestep if timestep else 5.0)
+        self.lags = np.arange(0, self.num, self.sampling)
+        self.results.t = self.lags * self.t_step / 1000.0
     
-    def calculate(self, l: int = 3, mean: bool = True, fit: bool = False, plot: bool = True, log_scale: bool = False, **kwargs: Any) -> Any:
-        """Compute C_l(t) and optionally fit and plot the result.
-
-        Parameters
-        ----------
-        l : int, optional
-            Order of the Legendre polynomial (1, 2, or 3). Default: 3.
-            l=2 is the most commonly reported value (NMR, Raman);
-            l=1 gives the slowest-decaying autocorrelation.
-        mean : bool, optional
-            If True (default), average C_l(t) over all chunks and vector pairs,
-            producing a single decay curve with an error estimate.
-            If False, return one curve per chunk.
-        fit : bool, optional
-            If True, fit C_l(t) with the KWW stretched exponential and store the
-            fitted curve and parameters in the results. Default: False.
-        plot : bool, optional
-            If True (default), display C_l(t) as a scatter plot, with the KWW fit
-            overlaid if fit=True.
-        log_scale : bool, optional
-            If True, display the y-axis on a logarithmic scale. Useful for
-            identifying multi-exponential or power-law decay behaviour. Default: False.
-        **kwargs
-            Additional keyword arguments forwarded to ``ax.scatter`` (e.g. color, s).
-
-        Returns
-        -------
-        results : dataclass
-            Populated results object; see class docstring for field descriptions.
-        """
+    def calculate(self, l: int = 2, fit: bool = False, plot: bool = True, log_scale: bool = False, **kwargs: Any) -> Any:
+        """Compute C_l(t) using dense time origins."""
+        self.results.l = l
         if self.traj is not None:
-            if any([self.spec[0] is None, self.spec[1] is None]):
-                raise ValueError("Please specify atom groups ")
-            else:
-                combs = make_comb(*self.spec)
-            frame_chunks = to_sublists(self.traj.frames, self.num)[::self.skip]
-            # n_select_frames = len(frame_chunks[0])
-
-            dot_products = np.zeros((len(frame_chunks), len(self.results.t), len(combs)))
-            
-            for i, frame_chunk in enumerate(frame_chunks):
-                select = frame_chunk[::self.sampling]
-                # Compute reference vectors once; reuse for all frames in this chunk.
-                # (A * B).sum(axis=1) is O(N) vs np.diagonal(A @ B.T) which is O(N²).
-                vecs_0 = select[0].vecs(combs=combs, absolute=False, normalise=True, mic=True)
-                dot_products[i, :] = np.stack([
-                    (frame.vecs(combs=combs, absolute=False, normalise=True, mic=True) * vecs_0).sum(axis=1)
-                    for frame in select
-                ])
-                update_progress(i / len(frame_chunks))
-            
-        # If the vec is an array of vectors without traj
+            is_specific = len(self.spec) > 0 and hasattr(self.spec[0], '__len__') and len(self.spec[0]) == 2 and isinstance(self.spec[0][0], (int, np.integer))
+            combs = self.spec if is_specific else make_comb(*self.spec)
+            vecs = np.stack([f.vecs(combs=combs, normalise=True, mic=True) for f in self.traj])
         else:
-            vec_chunks = to_sublists(self.spec, self.num)[::self.skip]
-            dot_products = np.zeros((len(vec_chunks), len(self.results.t)))
-            for i, vec_chunk in enumerate(vec_chunks):
-                select = vec_chunk[::self.sampling]
-                dot_products[i] = np.asarray([vecs.dot(select[0]) / (np.linalg.norm(vecs) * np.linalg.norm(select[0])) for vecs in select])
-                update_progress(i / len(vec_chunks))
+            vecs = np.asarray(self.spec, dtype=float)
+            if vecs.ndim == 2: vecs = vecs[:, np.newaxis, :]
+            vecs /= np.linalg.norm(vecs, axis=-1, keepdims=True)
 
-        n_chunks = len(frame_chunks) if self.traj is not None else len(vec_chunks)
-        if mean:
-            if self.traj is not None:
-                dot_products = np.hstack(dot_products)
-            else:
-                dot_products = dot_products.T
-                
-        if l == 1:
-            if mean:
-                self.results.C_t = dot_products.mean(axis = 1)
-                self.results.C_t_error = dot_products.std(axis = 1) / (n_chunks)**0.5
-            else:
-                self.results.C_t = dot_products.mean(axis = 0)
-                self.results.C_t_error = dot_products.std(axis = 0) / (n_chunks)**0.5
-        
-        elif l == 2:
-            if mean:
-                self.results.C_t = ((3 * (dot_products)**2 - 1)/2).mean(axis = 1)
-                self.results.C_t_error = ((3 * (dot_products)**2 - 1)/2).std(axis = 1) / (n_chunks)**0.5
-            else:
-                self.results.C_t = ((3 * (dot_products)**2 - 1)/2).mean(axis = 0)
-                self.results.C_t_error = ((3 * (dot_products)**2 - 1)/2).std(axis = 0) / (n_chunks)**0.5
+        n_frames, n_vecs, _ = vecs.shape
+        t0_indices = np.arange(0, n_frames - self.lags[-1], self.skip)
+        res_per_origin = np.zeros((len(t0_indices), len(self.lags)))
 
-        elif l == 3:
-            if mean:
-                self.results.C_t = ((5 * (dot_products)**3 - 3 * (dot_products))/2).mean(axis = 1)
-                self.results.C_t_error = (((5 * (dot_products)**3 - 3 * (dot_products))/2)).std(axis = 1) / (n_chunks)**0.5
-            else:
-                self.results.C_t = ((5 * (dot_products)**3 - 3 * (dot_products))/2).mean(axis = 0)
-                self.results.C_t_error = (((5 * (dot_products)**3 - 3 * (dot_products))/2)).std(axis = 0) / (n_chunks)**0.5
-        
-        else:
-            raise ValueError("l = 1, 2 or 3")
+        for i, t0 in enumerate(t0_indices):
+            u0, ut = vecs[t0], vecs[t0 + self.lags]
+            dots = np.sum(u0 * ut, axis=-1)
+            if l == 1: pl = dots
+            elif l == 2: pl = 0.5 * (3 * dots**2 - 1)
+            elif l == 3: pl = 0.5 * (5 * dots**3 - 3 * dots)
+            res_per_origin[i] = pl.mean(axis=1)
+            update_progress(i / len(t0_indices))
 
-        def kww_func_fit(x, y, tau = 1, beta = 0.4, maxfev = 10000):
-            """Fit C_l(t) with the KWW stretched exponential exp(−(t/τ)^β)."""
-            def kww_func(t, tau, beta):
-                return np.exp(-(t/tau)**beta)
+        self.results.C_t = res_per_origin.mean(axis=0)
+        self.results.C_t_error = res_per_origin.std(axis=0) / np.sqrt(len(t0_indices))
 
-            params,_ = curve_fit(kww_func, x, y, p0=[tau, beta], maxfev = maxfev)
-            x_fit = np.linspace(x.min(), x.max(), num = 200)
-            y_fit = kww_func(x_fit, *params)
-            print("The fitted KWW function parameters are:\ntau: {0:.4f} ps, beta: {1:.4f}".format(*params))
-            return x_fit, y_fit, params
-        
         if fit:
-            self.results.t_fit = np.linspace(self.results.t.min(), self.results.t.max(), num = 200)
-            if len(self.results.C_t.shape) == 1:
-                self.results.C_t_fit = np.zeros(200)
-                self.results.fit_params = np.zeros(2)
-                _, self.results.C_t_fit, self.results.fit_params = kww_func_fit(self.results.t, self.results.C_t)
-            elif self.results.C_t.shape[-1] == 1:
-                self.results.C_t_fit = np.zeros(200)
-                self.results.fit_params = np.zeros(2)
-                _, self.results.C_t_fit, self.results.fit_params = kww_func_fit(self.results.t, self.results.C_t.flatten())
-            else:
-                self.results.C_t_fit = np.zeros((200, self.results.C_t.shape[-1]))
-                self.results.fit_params = np.zeros((2, self.results.C_t.shape[-1]))
-                for i in range(self.results.C_t.shape[-1]):
-                    _, self.results.C_t_fit[:, i], self.results.fit_params[i] = kww_func_fit(self.results.t, self.results.C_t[:, i])
+            def kww(t, tau, b): return np.exp(-np.power(np.maximum(t, 0) / tau, b))
+            idx_e = np.where(self.results.C_t < 1/np.e)[0]
+            tau0 = self.results.t[idx_e[0]] if len(idx_e) > 0 else self.results.t[-1]
+            p, _ = curve_fit(kww, self.results.t, self.results.C_t, p0=[tau0, 0.5])
+            self.results.fit_params, self.results.tau, self.results.beta = p, p[0], p[1]
+            self.results.t_fit = np.linspace(self.results.t.min(), self.results.t.max(), 200)
+            self.results.C_t_fit = kww(self.results.t_fit, *p)
+            self.results.tau_eff = (p[0] / p[1]) * gamma(1.0 / p[1])
         
-        update_progress(1)
-        
-        # delete temp variable to release some memory
-        if 'frame_chunks' in locals(): del frame_chunks
-        if 'vec_chunks' in locals(): del vec_chunks
-        del dot_products, select
-        
-        # Plot the results    
+        update_progress(1.0)
         if plot:
-            fig, ax = plt.subplots(figsize = (4.2, 3.6))
-            if len(self.results.C_t.shape) == 1:
-                ax.scatter(self.results.t, self.results.C_t, **kwargs)
-                if fit:
-                    ax.plot(self.results.t_fit, self.results.C_t_fit, color = "#525252", lw = 2)
-            else:
-                [ax.scatter(self.results.t, self.results.C_t[:,i], **kwargs) for i in range(self.results.C_t.shape[1])]
-                if fit:
-                    if len(self.results.C_t_fit.shape) == 1:
-                        ax.plot(self.results.t_fit, self.results.C_t_fit, color = "#525252", lw = 2)
-                    else:
-                        [ax.plot(self.results.t_fit, self.results.C_t_fit[:,i], color = "#525252", lw = 2) for i in range(self.results.C_t.shape[1])]
-            
-            ax.set_xlabel(r"$t$ (ps)")
-            ax.set_ylabel(f"$C^{l}_t$")
-            
-            if log_scale:
-                plt.semilogy()
-            plt.show()
-            self.results.plot = fig
-            
+            fig, ax = plt.subplots(figsize=(4.2, 3.6))
+            ax.errorbar(self.results.t, self.results.C_t, yerr=self.results.C_t_error, fmt='o', ms=4, **kwargs)
+            if fit: ax.plot(self.results.t_fit, self.results.C_t_fit, 'r-', lw=2)
+            ax.set_xlabel("t (ps)"); ax.set_ylabel(f"$C_{l}(t)$")
+            if log_scale: ax.set_yscale('log')
+            plt.show(); self.results.plot = fig
         return self.results
 
+    def summary(self):
+        """Print a scientific interpretation of the computed VRD."""
+        print("="*75)
+        print(" VECTOR REORIENTATION DYNAMICS (VRD) SUMMARY")
+        print("="*75)
+        
+        print(f" Legendre Polynomial Order (l) : {self.results.l}")
+        
+        if hasattr(self.results, 'tau'):
+            print("-" * 75)
+            print(" STRETCHED EXPONENTIAL (KWW) FIT RESULTS:")
+            print(f" Relaxation Time (tau)  : {self.results.tau:.4f} ps")
+            print(f" Stretching Exponent (β): {self.results.beta:.4f}")
+            print(f" Effective Time (τ_eff) : {self.results.tau_eff:.4f} ps")
+            
+            print("\n FIT INTERPRETATION:")
+            if self.results.beta > 0.95:
+                print(" - β ≈ 1 : Simple Debye (exponential) relaxation. Rotational environment is uniform.")
+            else:
+                print(" - β < 1 : Stretched exponential relaxation. Rotational dynamics are highly")
+                print("           heterogeneous (e.g. sub-ensembles of molecules rotating at different")
+                print("           speeds due to complex caging or hydrogen bonding networks).")
+        
+        print("-" * 75)
+        print(" GENERAL INTERPRETATION GUIDE:")
+        print(" - The curve C(t) shows how fast molecules 'forget' their initial orientation.")
+        print(" - An initial rapid drop (within < 0.2 ps) corresponds to 'librations'")
+        print("   (frustrated rotations or wobbling within the local solvent cage).")
+        print(" - The slower, long-time tail corresponds to true structural reorientation.")
+        print(" - l=1 maps to Dielectric relaxation/IR spectra.")
+        print(" - l=2 maps to NMR relaxation and Raman scattering.")
+        print("="*75)
 
+
+# VHCF
 class VHCF(object):
     """Van Hove correlation function G(r, τ) and non-Gaussian parameter analysis.
 
@@ -882,152 +866,67 @@ class VHCF(object):
         if vol_scalar < 1e-6:
             if not self.is_self:
                 warnings.warn("Trajectory cell volume is 0.0 or invalid! Distinct G_d(r,t) normalization "
-                              "requires bulk density. Falling back to volume = 1.0 to prevent math collapse. "
-                              "Contour shapes will be correct, but Y-axis magnitudes will be unscaled.")
+                              "requires bulk density. Falling back to volume = 1.0.")
             vol_scalar = 1.0
             
         self.volume = np.full(shape=self.settings.bins, fill_value=vol_scalar, dtype=np.float64)
 
-    def calculate(self, plot=False, tau_sel=None, r_sel=None, plot_vs="r", zlim=None, levels=60, cmap=None, save_fig=None, **kwargs):
-        """Compute G(r, τ), RPD, α₂, and MSD, then optionally plot.
-
-        Parameters
-        ----------
-        plot : bool, optional
-            If True, call ``plot_probability_density`` after the calculation.
-            Default: False.
-        tau_sel : list of float, optional
-            Selected τ values in ps for which a 1D slice through G(r, τ) is plotted
-            alongside the 2D contour (used when plot=True and plot_vs="r").
-        r_sel : list of float, optional
-            Selected r values in Å for which a 1D slice through G(r, τ) is plotted
-            alongside the 2D contour (used when plot=True and plot_vs="tau").
-        plot_vs : {"r", "tau"}, optional
-            Axis orientation for the 2D contour: "r" (default) puts distance on
-            the x-axis and time on the y-axis; "tau" swaps the axes.
-        zlim : ignored
-            Reserved for future use.
-        levels : int, optional
-            Number of contour levels in the 2D plot. Default: 60.
-        cmap : matplotlib colormap, optional
-            Colormap for the 2D contour plot. Defaults to a built-in diverging ramp.
-        save_fig : str or None, optional
-            If provided, save the figure to this file path at 300 dpi.
-
-        Returns
-        -------
-        results : dataclass
-            Populated results object; see class docstring for field descriptions.
-        """
-        N_pairs = len(self.pairs)
-        bin_widths = np.diff(self.results.r_edges)
+    def calculate(self, plot=False, tau_sel=None, r_sel=None, plot_vs="r", levels=60, cmap=None, save_fig=None, **kwargs):
+        """Compute G(r, τ) using raw moments and sliding windows."""
+        t0_stride = max(1, int(round(self.tau_sep / self.traj.timestep)))
+        bin_w = np.diff(self.results.r_edges)
+        vols = 4/3 * np.pi * np.diff(np.power(self.results.r_edges, 3))
         
         if self.is_self:
-            # Self-part tracks the same atom over time: MIC must NOT be applied here
-            # because it would alias large displacements that cross the box boundary.
-            # The trajectory must use unwrapped (non-wrapped) coordinates for correct
-            # MSD and non-Gaussian parameter values. Call traj.calib() but NOT wrap2box().
-            warnings.warn(
-                "VHCF self-part requires unwrapped coordinates. "
-                "Do not call wrap2box() before this calculation; "
-                "use calib() only so atoms are free to diffuse beyond one box length.",
-                stacklevel=2,
-            )
+            pos_all = np.stack([f.pos[self.g1] for f in self.traj])
             for i, tau in enumerate(self.results.tau):
                 sep = int(round(1000 * tau / self.traj.timestep))
-                n_frames_eval = self.traj.nframes - sep
-
-                if n_frames_eval <= 0: continue
-
-                dists = np.asarray([np.linalg.norm(self.traj.frames[j + sep].pos[self.pairs[:,1]] - self.traj.frames[j].pos[self.pairs[:,0]], axis=1) for j in range(n_frames_eval)])
-                
-                r2_mean = np.mean(dists**2)
-                r4_mean = np.mean(dists**4)
-                self.results.msd[i] = r2_mean
-                
-                if r2_mean > 1e-12:
-                    self.results.alpha2[i] = (3.0 * r4_mean) / (5.0 * (r2_mean**2)) - 1.0
-                else:
-                    self.results.alpha2[i] = 0.0
-
-                counts, _ = np.histogram(dists, **asdict(self.settings))
-                
-                self.results.rpd[i] = counts / (n_frames_eval * N_pairs * bin_widths)
+                if sep >= self.traj.nframes: continue
+                t0s = np.arange(0, self.traj.nframes - sep, t0_stride)
+                if len(t0s) == 0: continue
+                dists = np.linalg.norm((pos_all[t0s + sep] - pos_all[t0s]).reshape(-1, 3), axis=1)
+                r2, r4 = np.mean(dists**2), np.mean(dists**4)
+                self.results.msd[i] = r2
+                self.results.alpha2[i] = (3 * r4) / (5 * r2**2) - 1 if r2 > 1e-12 else 0
+                c, _ = np.histogram(dists, **asdict(self.settings))
+                self.results.rpd[i] = c / (len(dists) * bin_w)
                 self.results.g_rt[i] = self.results.rpd[i] / (4 * np.pi * self.results.r**2)
-                
+                update_progress(i / len(self.results.tau))
         else:
-            vols = 4/3 * np.pi * np.diff(np.power(self.results.r_edges, 3))
-            density = N_pairs / self.volume[0]
-            cell = self.traj.frames[0].cell
-
-            # Vectorised MIC distance for (N,3) position arrays — defined once.
-            def _mic_norm(pos_a, pos_b):
-                d = cart2xys(pos_b - pos_a, cell)
-                d -= np.round(d)
-                return np.linalg.norm(xys2cart(d, cell), axis=1)
-
+            density = len(self.pairs) / self.volume[0]
+            p1 = np.stack([f.pos[self.pairs[:,0]] for f in self.traj])
+            p2 = np.stack([f.pos[self.pairs[:,1]] for f in self.traj])
             for i, tau in enumerate(self.results.tau):
                 sep = int(round(1000 * tau / self.traj.timestep))
-                n_frames_eval = self.traj.nframes - sep
-
-                if n_frames_eval <= 0: continue
-
-                dists = np.asarray([_mic_norm(
-                    self.traj.frames[j].pos[self.pairs[:, 0]],
-                    self.traj.frames[j + sep].pos[self.pairs[:, 1]],
-                ) for j in range(n_frames_eval)])
-                counts, _ = np.histogram(dists, **asdict(self.settings))
-                
-                self.results.g_rt[i] = counts / (density * vols * n_frames_eval)
-                self.results.rpd[i] = counts / (n_frames_eval * N_pairs * bin_widths)
-
+                if sep >= self.traj.nframes: continue
+                t0s = np.arange(0, self.traj.nframes - sep, t0_stride)
+                all_d = []
+                for t0 in t0s:
+                    d = xys2cart(cart2xys(p2[t0+sep]-p1[t0], self.traj.cell) % 1.0 - 0.5, self.traj.cell)
+                    all_d.append(np.linalg.norm(d, axis=1))
+                dists = np.concatenate(all_d)
+                c, _ = np.histogram(dists, **asdict(self.settings))
+                self.results.g_rt[i] = c / (density * vols * len(t0s))
+                self.results.rpd[i] = c / (len(t0s) * len(self.pairs) * bin_w)
+                update_progress(i / len(self.results.tau))
+        update_progress(1.0)
+        
         if plot:
             self.plot_probability_density(tau_sel=tau_sel, r_sel=r_sel, plot_vs=plot_vs, levels=levels, cmap=cmap, save_fig=save_fig)
-            
         return self.results
 
     def _get_cmap(self, cmap):
-        if cmap is None:
-            from colour import Color
-            from matplotlib.colors import LinearSegmentedColormap
-            ramp_colors = ["#ffffff", "#9ecae1", "#2166ac", "#1a9850", "#ffff33", "#b2182b", "#67000d"]
-            return LinearSegmentedColormap.from_list('my_list', [Color(c1).rgb for c1 in ramp_colors])
-        return cmap
+        if cmap is not None: return cmap
+        try: return style.cdf_cmap
+        except: return "RdYlBu_r"
 
     def plot_probability_density(self, tau_sel=None, r_sel=None, plot_vs="r", levels=50, cmap=None, tau_lim=None, r_lim=None, saturation_factor=1.0, save_fig=None):
-        """Plot the Van Hove correlation function G(r, τ) as a 2D contour.
-
-        For the self-part, G_s peaks sharply at r = 0 at short τ and broadens as
-        atoms diffuse. For the distinct-part, G_d shows structural peaks at τ = 0
-        that flatten toward 1 as the liquid structure decorrelates over time.
-
-        Parameters
-        ----------
-        tau_sel : list of float, optional
-            τ values in ps for which a 1D G(r) slice is plotted (requires plot_vs="r").
-        r_sel : list of float, optional
-            r values in Å for which a 1D G(τ) slice is plotted (requires plot_vs="tau").
-        plot_vs : {"r", "tau"}, optional
-            Axis orientation: "r" puts distance on the x-axis (default); "tau" swaps.
-        levels : int, optional
-            Number of contour levels. Default: 50.
-        cmap : matplotlib colormap, optional
-            Colormap; defaults to the built-in diverging ramp.
-        tau_lim : tuple of float, optional
-            (τ_min, τ_max) axis limits in ps.
-        r_lim : tuple of float, optional
-            (r_min, r_max) axis limits in Å.
-        saturation_factor : float, optional
-            Fraction of the colour range to use; values < 1 saturate the high end
-            and reveal fine structure at low density. Default: 1.0.
-        save_fig : str or None, optional
-            File path to save the figure at 300 dpi.
-        """
+        """Plot the Van Hove correlation function G(r, τ) as a 2D contour."""
         cmap = self._get_cmap(cmap)
-        
         zmin, zmax = np.nanmin(self.results.g_rt), np.nanmax(self.results.g_rt)
         if zmin == zmax == 0.0: zmax = 1.0 
-        vmax_val = zmin + saturation_factor * (zmax - zmin)
+        vmax_val = zmin + saturation_factor * (zmax - zmin if zmax > zmin else 1.0)
+        levels_arr = np.linspace(zmin, vmax_val, levels)
 
         print("-" * 75)
         print(f" RAW DENSITY G(r,t) INTERPRETATION (Plot vs {plot_vs.upper()})")
@@ -1072,13 +971,13 @@ class VHCF(object):
             axes[0].legend()
 
         if plot_vs == "r":
-            CS = ax_contour.contourf(self.results.r, self.results.tau, self.results.g_rt, vmax=vmax_val, levels=levels, cmap=cmap)
-            ax_contour.contour(self.results.r, self.results.tau, self.results.g_rt, colors="k", vmax=vmax_val, levels=levels, linewidths=0.1)
+            CS = ax_contour.contourf(self.results.r, self.results.tau, self.results.g_rt, vmax=vmax_val, levels=levels_arr, cmap=cmap)
+            ax_contour.contour(self.results.r, self.results.tau, self.results.g_rt, colors="k", vmax=vmax_val, levels=levels_arr, linewidths=0.1)
             ax_contour.set_xlabel(r"Distance ($\mathrm{\AA}$)")
             ax_contour.set_ylabel(r"$\tau$ (ps)")
         else:
-            CS = ax_contour.contourf(self.results.tau, self.results.r, self.results.g_rt.T, vmax=vmax_val, levels=levels, cmap=cmap)
-            ax_contour.contour(self.results.tau, self.results.r, self.results.g_rt.T, colors="k", vmax=vmax_val, levels=levels, linewidths=0.1)
+            CS = ax_contour.contourf(self.results.tau, self.results.r, self.results.g_rt.T, vmax=vmax_val, levels=levels_arr, cmap=cmap)
+            ax_contour.contour(self.results.tau, self.results.r, self.results.g_rt.T, colors="k", vmax=vmax_val, levels=levels_arr, linewidths=0.1)
             ax_contour.set_xlabel(r"$\tau$ (ps)")
             ax_contour.set_ylabel(r"Distance ($\mathrm{\AA}$)")
 
@@ -1092,43 +991,17 @@ class VHCF(object):
         
         if save_fig:
             fig.savefig(save_fig, dpi=300, bbox_inches='tight')
+        self.results.plot = fig
         plt.show()
 
     def plot_radial_probability(self, tau_sel=None, r_sel=None, plot_vs="r", levels=50, cmap=None, tau_lim=None, r_lim=None, saturation_factor=1.0, save_fig=None):
-        """Plot the radial probability distribution RPD(r, τ) = 4π r² G(r, τ).
-
-        RPD is the probability density weighted by shell volume. Unlike G(r, τ),
-        which diverges at r = 0 for the self-part, RPD goes to zero at r = 0 and
-        peaks at the most probable displacement distance. Integrating RPD over r
-        gives 1 for the self-part at any τ. Secondary peaks at intermediate τ values
-        are a signature of discrete atomic hopping between lattice sites.
-
-        Parameters
-        ----------
-        tau_sel : list of float, optional
-            τ values in ps for 1D RPD(r) slices (requires plot_vs="r").
-        r_sel : list of float, optional
-            r values in Å for 1D RPD(τ) slices (requires plot_vs="tau").
-        plot_vs : {"r", "tau"}, optional
-            Axis orientation. Default: "r".
-        levels : int, optional
-            Number of contour levels. Default: 50.
-        cmap : matplotlib colormap, optional
-            Colormap; defaults to the built-in diverging ramp.
-        tau_lim : tuple of float, optional
-            (τ_min, τ_max) axis limits in ps.
-        r_lim : tuple of float, optional
-            (r_min, r_max) axis limits in Å.
-        saturation_factor : float, optional
-            Fraction of the colour range to display. Default: 1.0.
-        save_fig : str or None, optional
-            File path to save the figure at 300 dpi.
-        """
+        """Plot the radial probability distribution RPD(r, τ) = 4π r² G(r, τ)."""
         cmap = self._get_cmap(cmap)
         
         zmin, zmax = np.nanmin(self.results.rpd), np.nanmax(self.results.rpd)
         if zmin == zmax == 0.0: zmax = 1.0
-        vmax_val = zmin + saturation_factor * (zmax - zmin)
+        vmax_val = zmin + saturation_factor * (zmax - zmin if zmax > zmin else 1.0)
+        levels_arr = np.linspace(zmin, vmax_val, levels)
 
         print("-" * 75)
         print(f" RPD VISUALIZATION INTERPRETATION (Plot vs {plot_vs.upper()})")
@@ -1173,13 +1046,13 @@ class VHCF(object):
             axes[0].legend()
 
         if plot_vs == "r":
-            CS = ax_contour.contourf(self.results.r, self.results.tau, self.results.rpd, vmax=vmax_val, levels=levels, cmap=cmap)
-            ax_contour.contour(self.results.r, self.results.tau, self.results.rpd, colors="k", vmax=vmax_val, levels=levels, linewidths=0.1)
+            CS = ax_contour.contourf(self.results.r, self.results.tau, self.results.rpd, vmax=vmax_val, levels=levels_arr, cmap=cmap)
+            ax_contour.contour(self.results.r, self.results.tau, self.results.rpd, colors="k", vmax=vmax_val, levels=levels_arr, linewidths=0.1)
             ax_contour.set_xlabel(r"Distance ($\mathrm{\AA}$)")
             ax_contour.set_ylabel(r"$\tau$ (ps)")
         else:
-            CS = ax_contour.contourf(self.results.tau, self.results.r, self.results.rpd.T, vmax=vmax_val, levels=levels, cmap=cmap)
-            ax_contour.contour(self.results.tau, self.results.r, self.results.rpd.T, colors="k", vmax=vmax_val, levels=levels, linewidths=0.1)
+            CS = ax_contour.contourf(self.results.tau, self.results.r, self.results.rpd.T, vmax=vmax_val, levels=levels_arr, cmap=cmap)
+            ax_contour.contour(self.results.tau, self.results.r, self.results.rpd.T, colors="k", vmax=vmax_val, levels=levels_arr, linewidths=0.1)
             ax_contour.set_xlabel(r"$\tau$ (ps)")
             ax_contour.set_ylabel(r"Distance ($\mathrm{\AA}$)")
 
@@ -1196,17 +1069,7 @@ class VHCF(object):
         plt.show()
 
     def plot_msd(self, save_fig=None):
-        """Plot the mean squared displacement ⟨Δr²⟩(τ) on a log–log scale.
-
-        Only available for the self-part (``at_g2=None``). The log–log slope reveals
-        the diffusion regime: slope ≈ 2 indicates ballistic (inertial) motion at very
-        short times; slope ≈ 0 indicates caging; slope = 1 indicates Fickian diffusion.
-
-        Parameters
-        ----------
-        save_fig : str or None, optional
-            File path to save the figure at 300 dpi.
-        """
+        """Plot the mean squared displacement ⟨Δr²⟩(τ) on a log–log scale."""
         if not self.is_self:
             print("-" * 75)
             print(" NOTE: Mean Squared Displacement (MSD) calculation skipped.")
@@ -1232,27 +1095,7 @@ class VHCF(object):
         plt.show()
 
     def plot_isf(self, k_val=2.5, save_fig=None):
-        """Compute and plot the intermediate scattering function F(k, τ).
-
-        The ISF is the spatial Fourier transform of G(r, τ) at wavevector magnitude k,
-        directly comparable to incoherent (self-part) or coherent (distinct-part)
-        neutron and X-ray scattering data:
-
-            F_s(k, τ) = ∫ RPD(r, τ) · sin(kr)/(kr) dr    (self-part)
-            F_d(k, τ) = ∫ 4π r² ρ [G_d(r, τ) − 1] · sin(kr)/(kr) dr   (distinct-part)
-
-        For the self-part, F_s decays from 1 to 0; the time at which F_s = 1/e defines
-        the alpha-relaxation time τ_α. A two-step decay indicates glassy dynamics.
-
-        Parameters
-        ----------
-        k_val : float, optional
-            Wavevector magnitude in Å⁻¹ at which the ISF is evaluated. Choose a value
-            near the first peak of the static structure factor S(k) for maximum
-            sensitivity to structural relaxation. Default: 2.5 Å⁻¹.
-        save_fig : str or None, optional
-            File path to save the figure at 300 dpi.
-        """
+        """Compute and plot the intermediate scattering function F(k, τ)."""
         self.results.isf = np.zeros(len(self.results.tau))
         dr = np.diff(self.results.r_edges)
         
@@ -1264,7 +1107,11 @@ class VHCF(object):
             if self.is_self:
                 self.results.isf[i] = np.sum(self.results.rpd[i] * sinc * dr)
             else:
-                density = len(self.pairs) / self.volume[0]
+                # The prefactor for distinct ISF should be the number density of the 
+                # target particles (nB / V), not the pair density, to ensure it is an intensive property.
+                # using len(set(self.pairs[:, 1])) guarantees unique target atoms.
+                nB = len(set(self.pairs[:, 1]))
+                density = nB / self.volume[0]
                 integrand = 4 * np.pi * (self.results.r**2) * density * (self.results.g_rt[i] - 1.0) * sinc
                 self.results.isf[i] = np.sum(integrand * dr)
 
@@ -1289,12 +1136,7 @@ class VHCF(object):
         plt.show()
 
     def summary(self):
-        """Print a scientific interpretation of all computed observables.
-
-        Summarises the calculation mode, time and spatial ranges, and interprets the
-        non-Gaussian parameter α₂ peak for the self-part. Also describes the physical
-        meaning of each visualisation method to guide analysis.
-        """
+        """Print a scientific interpretation of all computed observables."""
         print("="*75)
         print(" VAN HOVE CORRELATION FUNCTION - COMPREHENSIVE SUMMARY")
         print("="*75)
@@ -1368,171 +1210,74 @@ class VHCF(object):
 class SDF(object):
     """Scalar distribution function g(δ) for an arbitrary observable.
 
-    The SDF computes the normalised probability density of any scalar quantity δ
-    extracted from a trajectory — for example a bond length, torsion angle,
-    coordination number, or an energy-like observable.  It is defined as
+    The SDF acts as a robust histogramming wrapper to compute the normalized 
+    probability density function of any 1D scalar property (e.g., local density, 
+    energy, or coordination number).
 
-        g(δ) = count(δ) / (N · Δδ)
+    The distribution is normalized such that:
+        ∫ g(δ) dδ = 1
 
-    where N is the total number of observations and Δδ is the bin width, so that
-    ∫ g(δ) dδ = 1.
-
-    This is a general-purpose wrapper around :func:`numpy.histogram` that attaches
-    the result to a results dataclass and optionally produces a publication-ready
-    line plot or a combined time-series / distribution panel.
+    Mathematically, this is:
+        g(δ) = N_obs(δ) / [ N_total * Δδ ]
 
     Parameters
     ----------
     traj : Trajectory
-        Trajectory object.  Used only to derive the time axis for the optional
-        time-series panel; the scalar observations are passed separately via
-        *scaler*.
-    scaler : array-like, shape (N,)
-        Pre-computed scalar observations.  Typically one value per trajectory
-        frame, but any 1-D sequence is accepted.
+        Trajectory object to analyse (used primarily to extract the time axis).
+    scaler : ndarray or list
+        The 1D array of scalar values to be histogrammed.
     nbins : int, optional
-        Number of histogram bins (controls resolution). Default: 200.
+        Number of histogram bins. Default: 200.
     range : tuple of float, optional
-        (δ_min, δ_max) over which the SDF is computed.  If *None* the data
-        range [min(scaler), max(scaler)] is used automatically.
+        (δ_min, δ_max). If None, uses the min and max of the scaler array.
 
-    Results dataclass fields (populated after calling calculate())
-    -------------------------------------------------------------
-    x        : ndarray, shape (nbins,) — bin-centre values of δ.
-    sdf      : ndarray, shape (nbins,) — normalised probability density g(δ).
-    count    : ndarray, shape (nbins,) — raw histogram counts.
-    edges    : ndarray, shape (nbins+1,) — bin edges.
-    t        : ndarray — time axis in ps derived from traj.timestep.
-    scaler   : ndarray — the scalar observations as supplied.
-    plot     : Figure or None — line-plot figure if plot=True was requested.
-    com_plot : Figure or None — combined time-series/SDF figure if com_plot=True.
-
-    Examples
-    --------
-    >>> oh_dists = [frame.dist(0, 1, mic=True) for frame in traj.frames]
-    >>> sdf = SDF(traj, scaler=oh_dists, nbins=150, range=(0.5, 3.5))
-    >>> results = sdf.calculate(plot=True, x_label=r"$r_{OH}$ (Å)")
+    Results dataclass fields
+    ------------------------
+    x        : ndarray — bin centres.
+    sdf      : ndarray — probability density g(δ).
+    t        : ndarray — time axis in ps.
     """
-
     def __init__(self, traj, scaler, nbins=200, range=None):
         self.traj = traj
-        scaler_arr = np.asarray(scaler, dtype=float)
-        if range is None:
-            range = (float(scaler_arr.min()), float(scaler_arr.max()))
-        settings_dc = make_dataclass("Settings", "bins range")
-        self.settings = settings_dc(nbins, range)
-        results_dc = make_dataclass("Results", "edges count x sdf plot t scaler com_plot")
-        self.results = results_dc
-        self.results.scaler = scaler_arr
-        self.results.t = np.linspace(
-            0,
-            self.traj.timestep * (self.traj.nframes - 1) / 1000,
-            self.traj.nframes,
-        )
-        self.results.plot = None
-        self.results.com_plot = None
+        s = np.asarray(scaler, dtype=float)
+        if range is None: range = (s.min(), s.max())
+        self.settings = make_dataclass("Settings", "bins range")(nbins, range)
+        self.results = make_dataclass("Results", "edges count x sdf plot t scaler com_plot")()
+        self.results.scaler = s
+        self.results.t = np.linspace(0, traj.timestep * (traj.nframes - 1) / 1000, traj.nframes)
 
     def calculate(self, plot=False, x_label=None, y_label=None, com_plot=False, **kwargs):
-        """Compute the scalar distribution function and optionally plot results.
-
-        Parameters
-        ----------
-        plot : bool, optional
-            If True, produce a line plot of g(δ) vs δ.
-        x_label : str, optional
-            x-axis label for the line plot and time-series panel.
-            Default: ``r"$\\delta$"``.
-        y_label : str, optional
-            y-axis label (g(δ) axis). Default: ``r"$g(\\delta)$"``.
-        com_plot : bool, optional
-            If True, produce a combined figure with a time-series panel on the
-            left and a rotated SDF panel on the right, sharing the δ axis.
-        **kwargs
-            Additional keyword arguments forwarded to
-            :func:`matplotlib.pyplot.plot`.
-
-        Returns
-        -------
-        results : dataclass
-            Populated results dataclass (see class docstring).
-
-        Notes
-        -----
-        The distribution is normalised so that ∫ g(δ) dδ = 1.  Dividing the
-        raw counts by N · Δδ gives a true probability density rather than a
-        count histogram, making results comparable across different bin widths
-        and dataset sizes.
-
-        Interpretation
-        --------------
-        - The peak position of g(δ) identifies the most probable value of the
-          observable — e.g., the preferred bond length or torsion angle.
-        - The width (FWHM) reflects the thermal fluctuations: broader peaks
-          indicate a more flexible degree of freedom.
-        - For bond lengths, compare the peak position with crystallographic values
-          to assess force-field accuracy.
-        - For torsion angles, distinct peaks at ±60°/180° indicate gauche/trans
-          populations characteristic of chain conformation statistics.
-        """
-        count, edges = np.histogram(self.results.scaler, **asdict(self.settings))
-        self.results.edges = edges
-        self.results.count = count
-        self.results.x = (edges[:-1] + edges[1:]) / 2
-        bin_width = edges[1] - edges[0]
-        N = int(self.results.scaler.shape[0])
-        self.results.sdf = count / (N * bin_width)
-
+        """Compute normalization: ∫ g(δ) dδ = 1."""
+        c, e = np.histogram(self.results.scaler, **asdict(self.settings))
+        self.results.edges, self.results.count, self.results.x = e, c, (e[:-1] + e[1:]) / 2
+        self.results.sdf = c / (len(self.results.scaler) * (e[1] - e[0]))
         if plot:
             fig, ax = plt.subplots(figsize=(4.2, 3.6))
             ax.plot(self.results.x, self.results.sdf, **kwargs)
-            ax.set_xlabel(r"$\delta$" if x_label is None else x_label)
-            ax.set_ylabel(r"$g(\delta)$" if y_label is None else y_label)
-            plt.tight_layout()
-            plt.show()
-            self.results.plot = fig
-
-        if com_plot:
-            t = self.results.t
-            scaler = self.results.scaler
-            if len(scaler) != len(t):
-                warnings.warn(
-                    "Length of scaler array does not match traj.nframes; "
-                    "the time-series panel may be misleading."
-                )
-            n_pts = min(len(scaler), len(t))
-            fig = plt.figure(figsize=(4.8, 3.6))
-            ax = fig.add_axes([0.20, 0.16, 0.56, 0.75])
-            ax.plot(t[:n_pts], scaler[:n_pts], **kwargs)
-            ax.set_xlabel(r"$t$ (ps)")
-            ax.set_ylabel(r"$\delta$" if x_label is None else x_label)
-
-            divider = make_axes_locatable(ax)
-            ax_hist = divider.append_axes("right", 0.5, pad=0.05, sharey=ax)
-            ax_hist.yaxis.tick_right()
-            ax_hist.plot(self.results.sdf, self.results.x, **kwargs)
-            ax_hist.set_xlabel(r"$g(\delta)$" if y_label is None else y_label)
-            plt.show()
-            self.results.com_plot = fig
-
-        peak_idx = np.argmax(self.results.sdf)
-        mean_val = np.average(self.results.x, weights=self.results.sdf)
-
-        print("")
-        print(" Scalar Distribution Function (SDF)")
-        print("=" * 50)
-        print(f"  Observations  : {N}")
-        print(f"  Bins          : {self.settings.bins}")
-        print(f"  Range         : [{self.settings.range[0]:.4g}, {self.settings.range[1]:.4g}]")
-        print(f"  Peak at δ     : {self.results.x[peak_idx]:.4g}")
-        print(f"  Weighted mean : {mean_val:.4g}")
-        print("=" * 50)
-        print("")
-        print(" Interpretation:")
-        print("  - Peak position: the most probable value of the observable.")
-        print("  - Peak width (FWHM): reflects thermal fluctuations; broader")
-        print("    peaks indicate a more flexible degree of freedom.")
-        print("  - Weighted mean: centre of mass of the distribution,")
-        print("    equal to <δ> averaged over all observations.")
-        print("=" * 50)
-
+            ax.set_xlabel(x_label if x_label else r"$\delta$")
+            ax.set_ylabel(y_label if y_label else r"$g(\delta)$")
+            plt.show(); self.results.plot = fig
         return self.results
+
+    def summary(self):
+        """Print a scientific interpretation of the computed SDF."""
+        print("="*75)
+        print(" SCALAR DISTRIBUTION FUNCTION (SDF) SUMMARY")
+        print("="*75)
+        
+        # Compute basic statistics
+        mean_val = np.mean(self.results.scaler)
+        std_val = np.std(self.results.scaler)
+        peak_idx = np.argmax(self.results.sdf)
+        
+        print(f" Data Points    : {len(self.results.scaler)}")
+        print(f" Global Mean    : {mean_val:.4f}")
+        print(f" Standard Dev.  : {std_val:.4f}")
+        print(f" Peak Value (x) : {self.results.x[peak_idx]:.4f} (Most probable state)")
+        print("-" * 75)
+        print(" INTERPRETATION GUIDE:")
+        print(" - The SDF is normalized as a true probability density.")
+        print(" - The integral of the curve across all x equals exactly 1.0.")
+        print(" - Broad distributions indicate large fluctuations or heterogeneity in the property.")
+        print(" - Multiple peaks indicate distinct structural or thermodynamic states.")
+        print("="*75)

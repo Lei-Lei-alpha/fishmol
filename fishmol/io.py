@@ -2,10 +2,10 @@
 Fast I/O for extended XYZ trajectory files and LAMMPS trajectories.
 
 Provides public helpers used by :mod:`fishmol.trj`:
-Provides public helpers used by :mod:`fishmol.trj`:
 
-- :func:`read_extxyz` — memory-mapped reader for extended XYZ files that
-  parses per-frame ``Lattice=`` fields, enabling NPT trajectories.
+- :func:`read_extxyz` — memory-mapped reader that parses per-frame
+  ``Lattice=`` fields, enabling NPT trajectories where the cell changes
+  between frames.
 - :func:`write_extxyz` — writer that embeds ``Lattice=`` in every comment
   line so files are round-trippable.
 - :func:`read_trajectory_files` — flexible loader for folders (CP2K, LAMMPS)
@@ -31,52 +31,35 @@ from recordclass import make_dataclass, dataobject
 
 # Matches  key="quoted value"  OR  key=bare_value  (no commas/spaces in value)
 _KV_RE = re.compile(
-    r'(\w+)\s*=\s*(?:"([^"]*)"|(.+?))(?=\s*\w+\s*=\s*|$)',
+    r'(\w+)\s*=\s*(?:"([^"]*)"|([^\s,"]+))',
     re.IGNORECASE,
 )
 
+
 def _parse_comment(line: str) -> dict:
     """Return a lower-cased ``{key: value_string}`` dict from a comment line."""
-    d = {
+    return {
         m.group(1).lower(): (m.group(2) if m.group(2) is not None else m.group(3))
         for m in _KV_RE.finditer(line)
     }
-    # Minimal addition: extract CP2K comma-separated 'key: value' pairs safely
-    for m in re.finditer(r'(\w+)\s*[:=]\s*([^,]+)', line):
-        k = m.group(1).lower()
-        if k not in d:
-            d[k] = m.group(2).strip()
-    return d
 
 
-def _extract_cell(d: dict, line: str) -> Optional[np.ndarray]:
+def _extract_cell(d: dict) -> Optional[np.ndarray]:
     """Return a ``(3, 3)`` float64 cell matrix from a parsed comment dict.
 
     Tries both ``lattice`` and ``cell`` keys.  Accepts 9 floats (general
     triclinic) or 3 floats (orthogonal diagonal).  Returns ``None`` when
     neither key is present or the value cannot be parsed.
     """
-    float_re = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
-    
-    for key in ('lattice', 'Lattice', 'cell', 'Cell'):
+    for key in ('lattice', 'cell'):
         raw = d.get(key)
         if raw is None:
             continue
-        vals = re.findall(float_re, raw)
+        vals = raw.split()
         if len(vals) == 9:
             return np.array(vals, dtype=float).reshape(3, 3)
         if len(vals) == 3:
             return np.diag(np.array(vals, dtype=float))
-
-    # Minimal addition: CP2K nested brackets fallback using the raw line
-    m = re.search(r'(?:Cell|Lattice)\s*[:=]\s*([\[\s\d.,eE+-\]]+)', line, re.IGNORECASE)
-    if m:
-        vals = re.findall(float_re, m.group(1))
-        if len(vals) >= 9:
-            return np.array(vals[:9], dtype=float).reshape(3, 3)
-        if len(vals) >= 3:
-            return np.diag(np.array(vals[:3], dtype=float))
-            
     return None
 
 
@@ -127,8 +110,9 @@ def read_trajectory_files(
     cell_path: Optional[str] = None,
     frc_path: Optional[str] = None,
     vel_path: Optional[str] = None,
+    log_path: Optional[str] = None,
 ) -> Tuple[int, int, list]:
-    """Read a trajectory from multiple files or a simulation folder (.xyz, .cell, .frc, .vel, .lammpstrj, .data).
+    """Read a trajectory from multiple files or a simulation folder (.xyz, .cell, .frc, .vel, .lammpstrj, .data, log.lammps).
     
     If .extxyz is used, all info is read from one file. If a folder is provided, it attempts
     to discover CP2K or LAMMPS output files automatically.
@@ -147,6 +131,8 @@ def read_trajectory_files(
         Path to the .frc file (usually frc-1.xyz, overrides discovery).
     vel_path : str, optional
         Path to the .vel file (usually vel-1.xyz, overrides discovery).
+    log_path : str, optional
+        Path to the log.lammps file (overrides discovery).
         
     Returns
     -------
@@ -164,11 +150,21 @@ def read_trajectory_files(
         
         # Check for LAMMPS
         lammpstrj_files = glob.glob(os.path.join(path, "*.lammpstrj"))
-        data_files = glob.glob(os.path.join(path, "*.data"))
-        if lammpstrj_files and data_files:
+        if not lammpstrj_files:
+            # Maybe the extension is just .trj or similar
+            lammpstrj_files = glob.glob(os.path.join(path, "*trj*"))
+            
+        if lammpstrj_files:
+            if data_path := glob.glob(os.path.join(path, "*.data")):
+                data_path = data_path[0]
+            if log_path is None:
+                if logs := glob.glob(os.path.join(path, "log.lammps*")):
+                    log_path = logs[0]
+            
             return read_lammps(
                 lammpstrj_path=lammpstrj_files[0],
-                data_path=data_files[0],
+                data_path=data_path,
+                log_path=log_path,
                 index=index,
                 timestep=timestep
             )
@@ -194,13 +190,15 @@ def read_trajectory_files(
     else:
         # It's a file
         xyz_path = path
-        if xyz_path.endswith('.lammpstrj'):
-            # If it's a lammpstrj file, we might need a .data file in the same dir
-            base_dir = os.path.dirname(xyz_path)
+        if xyz_path.endswith('.lammpstrj') or '.trj' in xyz_path:
+            # If it's a lammpstrj file, we might need a .data or log file in the same dir
+            base_dir = os.path.dirname(os.path.abspath(xyz_path))
             data_files = glob.glob(os.path.join(base_dir, "*.data"))
+            logs = glob.glob(os.path.join(base_dir, "log.lammps*"))
             return read_lammps(
                 lammpstrj_path=xyz_path,
                 data_path=data_files[0] if data_files else None,
+                log_path=logs[0] if logs else None,
                 index=index,
                 timestep=timestep
             )
@@ -225,7 +223,6 @@ def read_trajectory_files(
                 if i < len(cell_lines):
                     parts = cell_lines[i].split()
                     # The .cell file has: Step, Time, Ax, Ay, Az, Bx, By, Bz, Cx, Cy, Cz, Volume
-                    # We need indices 2 to 10 (the 9 cell parameters)
                     if len(parts) >= 11:
                         cell_vals = parts[2:11]
                         cell_arr = np.array(cell_vals, dtype=float).reshape(3, 3)
@@ -240,7 +237,6 @@ def read_trajectory_files(
 
     # Read forces if provided
     if frc_path:
-        # Forces are usually in another XYZ-like file
         _, _, f_frames = read_extxyz(frc_path, index=index)
         for i, frame in enumerate(frames):
             if i < len(f_frames):
@@ -261,42 +257,32 @@ def read_trajectory_files(
 def read_lammps(
     lammpstrj_path: str,
     data_path: Optional[str] = None,
+    log_path: Optional[str] = None,
     index: Union[str, slice, int] = ':',
-    timestep: Optional[float] = None
+    timestep: Optional[float] = None,
+    symbol_of_type: Optional[Dict[int, str]] = None,
 ) -> Tuple[int, int, list]:
-    """Read a LAMMPS trajectory from a .lammpstrj file.
+    """Read a LAMMPS trajectory with robust type mapping and cell parsing.
     
-    Element information is extracted from a corresponding .data file if provided.
-    
-    Parameters
-    ----------
-    lammpstrj_path : str
-        Path to the LAMMPS trajectory file.
-    data_path : str, optional
-        Path to the LAMMPS data file for element mapping.
-    index : str, int, or slice
-        Frame selection.
-    timestep : float, optional
-        Nominal time step between consecutive frames in **fs**.
-        
-    Returns
-    -------
-    natoms : int
-    nframes : int
-    frames : list of Atoms
+    Triclinic boxes are handled by transforming bounding box limits using
+    tilt factors (xy, xz, yz).
     """
     from fishmol.atoms import Atoms
-    from fishmol.data import elements
     
-    # 1. Parse .data file for element mapping
+    # 1. Merge type mappings (Priority: User > Log > Data)
     type_to_symb = {}
     if data_path:
-        type_to_symb = _parse_lammps_data(data_path)
+        type_to_symb.update(_parse_lammps_data(data_path))
+    if log_path:
+        type_to_symb.update(_parse_lammps_log(log_path))
+    if symbol_of_type:
+        type_to_symb.update(symbol_of_type)
     
     # 2. Parse .lammpstrj
     frames = []
     with open(lammpstrj_path, 'r') as f:
-        # Split by ITEM: TIMESTEP to get frame blocks
+        # Avoid loading massive files into memory by splitting on demand if possible,
+        # but for simplicity we read and split:
         content = f.read().split('ITEM: TIMESTEP\n')[1:]
     
     all_indices = list(range(len(content)))
@@ -317,33 +303,38 @@ def read_lammps(
         num_atoms = int(block[2])
         natoms = num_atoms
         
-        # Box bounds
-        # ITEM: BOX BOUNDS xy xz yz pp pp pp
+        # Box bounds: ITEM: BOX BOUNDS [xy xz yz] pp pp pp
         box_header = block[3]
         is_triclinic = 'xy xz yz' in box_header
         
         bounds = [line.split() for line in block[4:7]]
-        xlo, xhi = float(bounds[0][0]), float(bounds[0][1])
-        ylo, yhi = float(bounds[1][0]), float(bounds[1][1])
-        zlo, zhi = float(bounds[2][0]), float(bounds[2][1])
+        xlo_b, xhi_b = float(bounds[0][0]), float(bounds[0][1])
+        ylo_b, yhi_b = float(bounds[1][0]), float(bounds[1][1])
+        zlo_b, zhi_b = float(bounds[2][0]), float(bounds[2][1])
         
         if is_triclinic:
             xy = float(bounds[0][2])
             xz = float(bounds[1][2])
             yz = float(bounds[2][2])
             
-            # LAMMPS triclinic cell vectors:
+            # Transform bounds to orthogonal lengths
+            # xlo = xlo_b - min(0, xy, xz, xy+xz)
+            # xhi = xhi_b - max(0, xy, xz, xy+xz)
+            lx = (xhi_b - max(0.0, xy, xz, xy+xz)) - (xlo_b - min(0.0, xy, xz, xy+xz))
+            ly = (yhi_b - max(0.0, yz)) - (ylo_b - min(0.0, yz))
+            lz = zhi_b - zlo_b
+            
             lattice = np.array([
-                [xhi - xlo, 0, 0],
-                [xy, yhi - ylo, 0],
-                [xz, yz, zhi - zlo]
+                [lx, 0, 0],
+                [xy, ly, 0],
+                [xz, yz, lz]
             ])
         else:
-            lattice = np.diag([xhi - xlo, yhi - ylo, zhi - zlo])
+            lattice = np.diag([xhi_b - xlo_b, yhi_b - ylo_b, zhi_b - zlo_b])
             
-        # Atoms
-        # ITEM: ATOMS id type x y z ...
+        # Atoms: ITEM: ATOMS id type x y z ...
         atom_header = block[7].split()
+        # Header starts with ITEM: ATOMS, so 'id' index in full split is index - 2 for atom lines
         id_col = atom_header.index('id') - 2
         type_col = atom_header.index('type') - 2
         x_col = atom_header.index('x') - 2
@@ -370,30 +361,41 @@ def read_lammps(
         
     return natoms, len(frames), frames
 
-def _parse_lammps_data(path: str) -> Dict[int, str]:
-    """Try to extract atom type to element mapping from a LAMMPS data file.
+def _parse_lammps_log(path: str) -> Dict[int, str]:
+    """Extract atom type mapping from log.lammps (mass and pair_coeff)."""
+    mapping = {}
+    if not os.path.exists(path): return mapping
     
-    Uses ASE if available, otherwise falls back to parsing Masses and comments.
-    """
+    with open(path, 'r') as f:
+        content = f.read()
+    
+    # 1. Parse mass lines: mass 1 55.845 # Fe
+    mass_matches = re.findall(r'mass\s+(\d+)\s+([\d\.]+)(?:\s+#\s+(\w+))?', content, re.IGNORECASE)
+    for tid_str, mass_str, symbol in mass_matches:
+        tid = int(tid_str)
+        if symbol:
+            mapping[tid] = symbol
+        else:
+            mapping[tid] = _guess_symbol_from_mass(float(mass_str))
+            
+    # 2. Parse pair_coeff lines: pair_coeff * * Fe H Mn Ni Ti V Zr
+    pc_match = re.search(r'pair_coeff\s+\*\s+\*\s+(.*)', content, re.IGNORECASE)
+    if pc_match:
+        from fishmol.data import elements
+        potential_elements = pc_match.group(1).split()
+        # Find valid elements in the list
+        real_elements = [e for e in potential_elements if e in elements]
+        if real_elements:
+            for i, symb in enumerate(real_elements):
+                mapping[i+1] = symb
+                
+    return mapping
+
+def _parse_lammps_data(path: str) -> Dict[int, str]:
+    """Extract atom type mapping from LAMMPS data file."""
     mapping = {}
     from fishmol.data import elements
     
-    # Try using ASE if available
-    try:
-        from ase.io import read
-        atoms = read(path, format='lammps-data')
-        l_types = atoms.get_array('type')
-        l_symbs = atoms.get_chemical_symbols()
-        for t, s in zip(l_types, l_symbs):
-            if t not in mapping:
-                mapping[int(t)] = s
-        if mapping: return mapping
-    except ImportError:
-        pass
-    except Exception:
-        pass
-
-    # Fallback: manual parsing
     with open(path, 'r') as f:
         lines = f.readlines()
         
@@ -403,8 +405,9 @@ def _parse_lammps_data(path: str) -> Dict[int, str]:
             in_masses = True
             continue
         if in_masses:
-            if not line.strip(): 
-                if mapping: break
+            line = line.strip()
+            if not line: 
+                if mapping: break # End of section
                 continue
             parts = line.split()
             if len(parts) >= 2:
@@ -412,22 +415,33 @@ def _parse_lammps_data(path: str) -> Dict[int, str]:
                     tid = int(parts[0])
                     mass = float(parts[1])
                     symbol = "X"
-                    min_diff = 1.0
-                    for s, m in elements.items():
-                        if abs(m - mass) < min_diff:
-                            min_diff = abs(m - mass)
-                            symbol = s
-                    # Check for symbol in comment
+                    # Check for comment: 1 55.845 # Fe
                     if '#' in line:
                         comment = line.split('#')[1].strip().split()[0]
                         if comment in elements:
                             symbol = comment
+                    
+                    if symbol == "X":
+                        symbol = _guess_symbol_from_mass(mass)
                     mapping[tid] = symbol
                 except ValueError:
                     in_masses = False
         if 'Atoms' in line: break
-
     return mapping
+
+def _guess_symbol_from_mass(mass: float) -> str:
+    """Guess chemical symbol from atomic mass."""
+    from fishmol.data import elements
+    best_symb = "X"
+    min_diff = 0.5 # Tolerance for mass matching
+    for s, m in elements.items():
+        if m is not None:
+            diff = abs(m - mass)
+            if diff < min_diff:
+                min_diff = diff
+                best_symb = s
+    return best_symb
+
 
 
 # ── Existing Extended XYZ Support ──────────────────────────────────────────────
@@ -515,8 +529,6 @@ def read_extxyz(
     sym_col, pos_slice = _col_indices(first_comment)
 
     frames: List[Atoms] = []
-    times: List[float] = []
-
     for fi in frame_ids:
         base = fi * block
         if base >= len(raw): break
@@ -602,6 +614,7 @@ def write_extxyz(
 
     with open(filename, 'w', encoding='utf-8') as fh:
         for i, frame in enumerate(frames):
+            # Build Lattice= string if cell data is available
             lattice_str: Optional[str] = None
             fc = frame.cell
             if fc is not None:

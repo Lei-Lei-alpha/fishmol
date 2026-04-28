@@ -1,5 +1,6 @@
 # matplotlib plot style file
 
+import matplotlib as mpl
 from matplotlib import rcParams
 from cycler import cycler
 from colour import Color
@@ -17,12 +18,20 @@ from matplotlib.colors import LinearSegmentedColormap
 ramp_colours = ["#ffffff", "#9ecae1", "#2166ac", "#1a9850", "#ffff33", "#b2182b", "#67000d"]
 cdf_cmap = LinearSegmentedColormap.from_list( 'cdf_colour', [ Color( c1 ).rgb for c1 in ramp_colours ] )
 
+# Register the colormap to avoid unhashable type errors in Matplotlib internal lookups
+try:
+    mpl.colormaps.register(cdf_cmap, name='cdf_colour', force=True)
+except AttributeError:
+    # Fallback for older matplotlib versions
+    import matplotlib.cm as cm
+    cm.register_cmap(name='cdf_colour', cmap=cdf_cmap)
+
 #----Plot style----#
 rcParams.update({
     "font.size": 13,
     "font.family": "sans-serif",
     "lines.markersize": 5,
-    "image.cmap": cdf_cmap,
+    "image.cmap": "cdf_colour", # Use the name of the registered colormap
 
     # "font.sans-serif": "Arial",
     # "font.weight": "heavy",

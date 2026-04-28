@@ -1,15 +1,10 @@
 """
 Trajectory object for MD post-processing.
 
-Reads trajectory files via :mod:`fishmol.io`.  Supported formats:
-
-* Extended XYZ (``.xyz``, ``.extxyz``) — per-frame ``Lattice=`` fields are
-  parsed automatically, making both NVT and NPT trajectories transparent.
-* LAMMPS dump (``.lammpstrj``, ``.dump``) — orthogonal and triclinic boxes,
-  all coordinate styles (``x y z``, ``xs ys zs``, ``xu yu zu``), ``element``
-  column or integer ``type`` column (requires *type_map*).
-
-Each :class:`~fishmol.atoms.Atoms` frame carries its own ``.cell``.
+Reads extended XYZ files via :mod:`fishmol.io`, which parses per-frame
+``Lattice=`` fields automatically.  This makes both NVT (fixed cell) and
+NPT (variable cell) trajectories transparent to callers: each
+:class:`~fishmol.atoms.Atoms` frame carries its own ``.cell``.
 """
 
 import numpy as np
@@ -21,18 +16,13 @@ from fishmol.atoms import Atoms
 from fishmol import io as _io
 
 
-_LAMMPS_EXTS = frozenset({'.lammpstrj', '.dump', '.lammps'})
-_XYZ_EXTS    = frozenset({'.xyz', '.extxyz'})
-
-
 class Trajectory:
     """An ordered sequence of :class:`~fishmol.atoms.Atoms` frames.
 
     Parameters
     ----------
-    timestep : float, optional
-        Nominal time step between consecutive stored frames in **fs**. 
-        If omitted, attempts to auto-infer from trajectory frame stamps.
+    timestep : float
+        Nominal time step between consecutive stored frames in **fs**.
     data : str, optional
         Path to an extended XYZ trajectory file, a LAMMPS .lammpstrj file, 
         or a directory containing a simulation (CP2K or LAMMPS).
@@ -45,8 +35,8 @@ class Trajectory:
     frames : list of :class:`~fishmol.atoms.Atoms`, optional
         Pre-built frame list — required when *data* is not given.
     index : str or int or slice, optional
-        Frame selection passed to the reader.  ``':'`` (default) reads every
-        frame.
+        Frame selection passed directly to :func:`~fishmol.io.read_extxyz`.
+        ``':'`` (default) reads every frame.
     cell : array-like of shape (3, 3) or None, optional
         Fallback cell (lattice vectors as rows, in Å) used when the
         trajectory file does not contain ``Lattice=`` fields — typical for
@@ -69,12 +59,12 @@ class Trajectory:
 
     Examples
     --------
-    Extended XYZ — NVT, cell supplied by caller:
+    NVT — cell supplied by caller (file has no ``Lattice=``):
 
     >>> cell = [[21.29, 0, 0], [-4.60, 20.79, 0], [-0.97, -1.21, 15.11]]
     >>> traj = Trajectory(timestep=5, data="nvt.xyz", cell=cell)
 
-    Extended XYZ — NPT, cell read from each frame's ``Lattice=``:
+    NPT — cell read automatically from each frame's ``Lattice=``:
 
     >>> traj = Trajectory(timestep=5, data="npt.xyz")
     >>> traj.frames[0].cell.lattice   # first-frame cell (3,3) array
@@ -115,7 +105,6 @@ class Trajectory:
                 vel_path=vel_path,
             )
         else:
-            self.timestep = timestep or 1.0
             self.natoms = natoms
             self.nframes = nframes
             self.frames = frames if frames is not None else []
@@ -136,7 +125,7 @@ class Trajectory:
         if self.frames:
             fc = self.frames[0].cell
             if fc is not None:
-                return getattr(fc, 'lattice', None)
+                return fc.lattice
         return None
 
     @property
@@ -148,7 +137,7 @@ class Trajectory:
         c1 = getattr(self.frames[-1].cell, 'lattice', None)
         if c0 is None or c1 is None:
             return False
-        return not np.allclose(np.asarray(c0), np.asarray(c1), atol=1e-5)
+        return not np.allclose(np.asarray(c0), np.asarray(c1))
 
     # ── sequence protocol ─────────────────────────────────────────────────────
 
