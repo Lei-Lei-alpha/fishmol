@@ -1,0 +1,11 @@
+# fishmol/io.py change log
+
+## 2026-04-29 - Update LAMMPS IO mapping
+
+- Updated `read_lammps` to automatically discover `.masses` and `.symbols` files in the trajectory directory.
+- Updated `_parse_lammps_log` to identify and parse lines starting with the `mass` command.
+- Added `_parse_lammps_masses` to handle `.masses` files.
+- Added `_parse_lammps_symbols` to handle `.symbols` files, supporting both chemical symbols and atomic numbers.
+- Improved `_parse_lammps_data` for more robust comment handling in the Masses section.
+- Updated `_guess_symbol_from_mass` to also recognize atomic numbers (integers in Z range).
+- Preserved all existing documentation and comments.

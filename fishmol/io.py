@@ -269,12 +269,27 @@ def read_lammps(
     """
     from fishmol.atoms import Atoms
     
-    # 1. Merge type mappings (Priority: User > Log > Data)
+    # 1. Discovery and merge type mappings (Priority: User > Symbols > Masses > Log > Data)
+    base_dir = os.path.dirname(os.path.abspath(lammpstrj_path))
+    if not data_path:
+        d = glob.glob(os.path.join(base_dir, "*.data"))
+        if d: data_path = d[0]
+    if not log_path:
+        l = glob.glob(os.path.join(base_dir, "log.lammps*"))
+        if l: log_path = l[0]
+        
+    masses_path = glob.glob(os.path.join(base_dir, "*.masses"))
+    symbols_path = glob.glob(os.path.join(base_dir, "*.symbols"))
+
     type_to_symb = {}
     if data_path:
         type_to_symb.update(_parse_lammps_data(data_path))
     if log_path:
         type_to_symb.update(_parse_lammps_log(log_path))
+    if masses_path:
+        type_to_symb.update(_parse_lammps_masses(masses_path[0]))
+    if symbols_path:
+        type_to_symb.update(_parse_lammps_symbols(symbols_path[0]))
     if symbol_of_type:
         type_to_symb.update(symbol_of_type)
     
@@ -366,28 +381,55 @@ def _parse_lammps_log(path: str) -> Dict[int, str]:
     mapping = {}
     if not os.path.exists(path): return mapping
     
-    with open(path, 'r') as f:
-        content = f.read()
+    from fishmol.data import elements
     
-    # 1. Parse mass lines: mass 1 55.845 # Fe
-    mass_matches = re.findall(r'mass\s+(\d+)\s+([\d\.]+)(?:\s+#\s+(\w+))?', content, re.IGNORECASE)
-    for tid_str, mass_str, symbol in mass_matches:
-        tid = int(tid_str)
-        if symbol:
-            mapping[tid] = symbol
-        else:
-            mapping[tid] = _guess_symbol_from_mass(float(mass_str))
+    with open(path, 'r') as f:
+        for line in f:
+            clean = line.strip()
+            if not clean: continue
             
-    # 2. Parse pair_coeff lines: pair_coeff * * Fe H Mn Ni Ti V Zr
-    pc_match = re.search(r'pair_coeff\s+\*\s+\*\s+(.*)', content, re.IGNORECASE)
-    if pc_match:
-        from fishmol.data import elements
-        potential_elements = pc_match.group(1).split()
-        # Find valid elements in the list
-        real_elements = [e for e in potential_elements if e in elements]
-        if real_elements:
-            for i, symb in enumerate(real_elements):
-                mapping[i+1] = symb
+            # Identify rows starting with mass (LAMMPS mass command)
+            if clean.lower().startswith('mass '):
+                parts = clean.split()
+                # mass <type> <value> [# symbol]
+                if len(parts) >= 3:
+                    try:
+                        tid = int(parts[1])
+                        val_str = parts[2]
+                        symbol = None
+                        
+                        # 1. Check for comment symbol: mass 1 55.845 # Fe
+                        if '#' in clean:
+                            comment_part = clean.split('#')[1].strip().split()
+                            if comment_part and comment_part[0] in elements:
+                                symbol = comment_part[0]
+                        
+                        if not symbol:
+                            # 2. Check if val_str is a symbol: mass 1 Fe (custom)
+                            if val_str in elements:
+                                symbol = val_str
+                            else:
+                                # 3. Treat as mass or atomic number
+                                try:
+                                    fval = float(val_str)
+                                    symbol = _guess_symbol_from_mass(fval)
+                                except ValueError:
+                                    pass
+                        
+                        if symbol:
+                            mapping[tid] = symbol
+                    except (ValueError, IndexError):
+                        continue
+                        
+            # Also parse pair_coeff for element names if provided
+            elif clean.lower().startswith('pair_coeff '):
+                parts = clean.split()
+                if len(parts) >= 4 and parts[1] == '*' and parts[2] == '*':
+                    # pair_coeff * * Fe H ...
+                    pot_elements = [p for p in parts[3:] if p in elements]
+                    for i, symb in enumerate(pot_elements):
+                        if (i+1) not in mapping:
+                            mapping[i+1] = symb
                 
     return mapping
 
@@ -395,6 +437,8 @@ def _parse_lammps_data(path: str) -> Dict[int, str]:
     """Extract atom type mapping from LAMMPS data file."""
     mapping = {}
     from fishmol.data import elements
+    
+    if not os.path.exists(path): return mapping
     
     with open(path, 'r') as f:
         lines = f.readlines()
@@ -405,33 +449,108 @@ def _parse_lammps_data(path: str) -> Dict[int, str]:
             in_masses = True
             continue
         if in_masses:
-            line = line.strip()
-            if not line: 
+            clean = line.strip()
+            if not clean: 
                 if mapping: break # End of section
                 continue
-            parts = line.split()
+            parts = clean.split()
             if len(parts) >= 2:
                 try:
                     tid = int(parts[0])
                     mass = float(parts[1])
-                    symbol = "X"
+                    symbol = None
                     # Check for comment: 1 55.845 # Fe
                     if '#' in line:
-                        comment = line.split('#')[1].strip().split()[0]
-                        if comment in elements:
-                            symbol = comment
+                        comment = line.split('#')[1].strip().split()
+                        if comment and comment[0] in elements:
+                            symbol = comment[0]
                     
-                    if symbol == "X":
+                    if not symbol:
                         symbol = _guess_symbol_from_mass(mass)
                     mapping[tid] = symbol
                 except ValueError:
-                    in_masses = False
+                    if mapping: in_masses = False
         if 'Atoms' in line: break
     return mapping
 
-def _guess_symbol_from_mass(mass: float) -> str:
-    """Guess chemical symbol from atomic mass."""
+def _parse_lammps_masses(path: str) -> Dict[int, str]:
+    """Extract atom type mapping from .masses file."""
+    mapping = {}
+    if not path or not os.path.exists(path): return mapping
     from fishmol.data import elements
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'): continue
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    tid = int(parts[0])
+                    symbol = parts[1]
+                    if symbol in elements:
+                        mapping[tid] = symbol
+                    elif len(parts) >= 3 and parts[2] in elements:
+                        mapping[tid] = parts[2]
+                    else:
+                        # Try to guess from parts[1] as mass
+                        try:
+                            mapping[tid] = _guess_symbol_from_mass(float(symbol))
+                        except ValueError:
+                            pass
+                except (ValueError, IndexError):
+                    continue
+    return mapping
+
+def _parse_lammps_symbols(path: str) -> Dict[int, str]:
+    """Extract atom type mapping from .symbols file."""
+    mapping = {}
+    if not path or not os.path.exists(path): return mapping
+    from fishmol.data import elements
+    symb_list = list(elements.keys())
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'): continue
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    tid = int(parts[0])
+                    val = parts[1]
+                    if val in elements:
+                        mapping[tid] = val
+                    else:
+                        # Try column 3 if it exists (atomic number)
+                        if len(parts) >= 3:
+                            try:
+                                z = int(parts[2])
+                                if 1 <= z <= len(symb_list):
+                                    mapping[tid] = symb_list[z-1]
+                            except ValueError:
+                                pass
+                        
+                        if tid not in mapping:
+                            # Try val as atomic number
+                            try:
+                                z = int(val)
+                                if 1 <= z <= len(symb_list):
+                                    mapping[tid] = symb_list[z-1]
+                            except ValueError:
+                                pass
+                except (ValueError, IndexError):
+                    continue
+    return mapping
+
+def _guess_symbol_from_mass(mass: float) -> str:
+    """Guess chemical symbol from atomic mass or atomic number."""
+    from fishmol.data import elements
+    symb_list = list(elements.keys())
+    
+    # 1. Try as atomic number (integer in range)
+    z_guess = int(round(mass))
+    if abs(mass - z_guess) < 1e-4 and 1 <= z_guess <= len(symb_list):
+        return symb_list[z_guess-1]
+
+    # 2. Try as mass
     best_symb = "X"
     min_diff = 0.5 # Tolerance for mass matching
     for s, m in elements.items():
@@ -440,6 +559,7 @@ def _guess_symbol_from_mass(mass: float) -> str:
             if diff < min_diff:
                 min_diff = diff
                 best_symb = s
+    
     return best_symb
 
 
