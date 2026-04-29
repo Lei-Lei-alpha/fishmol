@@ -159,6 +159,10 @@ class Atoms(np.ndarray):
     @pos.setter
     def pos(self, val): self._pos = np.asarray(val)
     @property
+    def positions(self): return self._pos
+    @positions.setter
+    def positions(self, val): self._pos = np.asarray(val)
+    @property
     def forces(self): return self._forces
     @forces.setter
     def forces(self, value): self._forces = value

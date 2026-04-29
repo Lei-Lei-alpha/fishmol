@@ -63,25 +63,28 @@ def _extract_cell(d: dict) -> Optional[np.ndarray]:
     return None
 
 
-def _col_indices(comment: str) -> Tuple[int, slice]:
-    """Parse ``Properties=`` to find symbol and position column offsets.
+def _col_indices(comment: str) -> Dict[str, Any]:
+    """Parse ``Properties=`` to find column offsets for all atomic data.
 
-    Returns ``(sym_col, pos_slice)`` where *sym_col* is the integer column
-    index of the element symbol and *pos_slice* is a slice for the three
-    Cartesian coordinates.
-
-    Falls back to ``(0, slice(1, 4))`` for non-standard or absent
-    ``Properties`` fields (symbol in column 0, xyz in columns 1–3).
+    Returns a dictionary mapping property names ('species', 'pos', 'forces', 
+    'velocities') to their column indices or slices.
     """
     m = re.search(r'[Pp]roperties\s*=\s*(?:"([^"]*)"|([^\s"]+))', comment)
+    
+    # Default mapping
+    res = {
+        'species': 0,
+        'pos': slice(1, 4),
+        'forces': None,
+        'velocities': None
+    }
+    
     if not m:
-        return 0, slice(1, 4)
+        return res
 
     spec = m.group(1) or m.group(2)
     parts = spec.split(':')
     col = 0
-    sym_col = 0
-    pos_slice = slice(1, 4)
 
     i = 0
     while i + 2 < len(parts):
@@ -91,14 +94,20 @@ def _col_indices(comment: str) -> Tuple[int, slice]:
             n = int(parts[i + 2])
         except ValueError:
             break
+            
         if name == 'species' and kind == 'S':
-            sym_col = col
+            res['species'] = col
         elif name in ('pos', 'positions') and kind == 'R' and n == 3:
-            pos_slice = slice(col, col + n)
+            res['pos'] = slice(col, col + n)
+        elif name in ('force', 'forces') and kind == 'R' and n == 3:
+            res['forces'] = slice(col, col + n)
+        elif name in ('vel', 'velocity', 'velocities') and kind == 'R' and n == 3:
+            res['velocities'] = slice(col, col + n)
+            
         col += n
         i += 3
 
-    return sym_col, pos_slice
+    return res
 
 
 # ── Flexible Trajectory Reading ────────────────────────────────────────────────
@@ -371,7 +380,7 @@ def read_lammps(
             symbs=np.array(symbs, dtype='<U2'),
             pos=np.array(pos, dtype=float),
             cell=Cell(lattice),
-            timestamp=ts * (timestep if timestep else 1.0)
+            timestamp=ts
         ))
         
     return natoms, len(frames), frames
@@ -646,7 +655,11 @@ def read_extxyz(
         _fallback = None
 
     first_comment = raw[1] if len(raw) > 1 else ''
-    sym_col, pos_slice = _col_indices(first_comment)
+    cols_map = _col_indices(first_comment)
+    sym_col = cols_map['species']
+    pos_slice = cols_map['pos']
+    force_slice = cols_map['forces']
+    vel_slice = cols_map['velocities']
 
     frames: List[Atoms] = []
     for fi in frame_ids:
@@ -668,7 +681,7 @@ def read_extxyz(
         
         if timestamp is None:
             # Fallback if no timestamp in comment
-            timestamp = (timestep if timestep is not None else 1.0) * fi
+            timestamp = (timestep if timestep else 1.0) * fi
 
         # Cell: prefer per-frame Lattice=, then fallback, then None
         cell_arr = _extract_cell(cell_dict)
@@ -681,17 +694,26 @@ def read_extxyz(
 
         symbs: List[str] = []
         positions: List[List[float]] = []
+        forces: Optional[List[List[float]]] = [] if force_slice else None
+        velocities: Optional[List[List[float]]] = [] if vel_slice else None
+
         for ln in atom_lines:
             cols = ln.split()
             if not cols: continue
             symbs.append(cols[sym_col])
             positions.append([float(v) for v in cols[pos_slice]])
+            if forces is not None:
+                forces.append([float(v) for v in cols[force_slice]])
+            if velocities is not None:
+                velocities.append([float(v) for v in cols[vel_slice]])
 
         frames.append(
             Atoms(
                 symbs=np.array(symbs, dtype='<U2'),
                 pos=np.array(positions, dtype=float),
                 cell=frame_cell,
+                forces=np.array(forces, dtype=float) if forces is not None else None,
+                velocities=np.array(velocities, dtype=float) if velocities is not None else None,
                 energy=energy,
                 timestamp=timestamp,
             )
